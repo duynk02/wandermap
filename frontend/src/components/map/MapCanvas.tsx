@@ -1,8 +1,6 @@
 "use client";
 
-import { useRef } from "react";
 import Map, { NavigationControl, GeolocateControl } from "react-map-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
 import { useMap } from "@/hooks/useMap";
 import { ClusterLayer } from "./ClusterLayer";
 import { TrendingPins } from "./TrendingPins";

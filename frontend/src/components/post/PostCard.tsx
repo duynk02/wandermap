@@ -96,6 +96,7 @@ export function PostCard({ post, compact = false }: PostCardProps) {
               width={compact ? 20 : 28}
               height={compact ? 20 : 28}
               className="rounded-full object-cover"
+              unoptimized
             />
             <span className={cn("font-medium text-ink hover:text-brand-500 transition-colors", compact ? "text-xs" : "text-sm")}>
               {post.author.display_name}

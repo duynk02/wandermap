@@ -1,4 +1,10 @@
-import type { Location, LocationFilters, MapBounds } from "@/types";
+import type {
+  Location,
+  LocationCategory,
+  LocationFilters,
+  MapBounds,
+  PaginatedResponse,
+} from "@/types";
 import { apiFetch, nullOn404 } from "./client";
 
 const wrapLng = (lng: number) => ((((lng + 180) % 360) + 360) % 360) - 180;
@@ -47,3 +53,22 @@ export const getTrendingLocations = (limit = 50) =>
 
 export const getLocationById = (id: string) =>
   nullOn404(apiFetch<Location>(`/locations/${encodeURIComponent(id)}`));
+
+/** Text search over existing locations (name / city / country). */
+export const searchLocations = (search: string, pageSize = 5, signal?: AbortSignal) =>
+  apiFetch<PaginatedResponse<Location>>("/locations", { query: { search, pageSize }, signal });
+
+export interface CreateLocationInput {
+  name: string;
+  address?: string;
+  coordinates: { lat: number; lng: number };
+  country?: string;
+  city?: string;
+  category?: LocationCategory;
+  /** Dedupe key: the API reuses the row when this value already exists. */
+  google_place_id?: string;
+}
+
+/** Requires login. Creates the location, or returns the existing one with the same google_place_id. */
+export const createLocation = (input: CreateLocationInput) =>
+  apiFetch<Location>("/locations", { method: "POST", body: input });

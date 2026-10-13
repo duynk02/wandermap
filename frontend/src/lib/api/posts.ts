@@ -1,6 +1,7 @@
 import { DEFAULT_PAGE_SIZE } from "@/constants";
 import type { FeedFilters, PaginatedResponse, Post } from "@/types";
-import { apiFetch } from "./client";
+import type { CreatePostInput } from "@/lib/validations";
+import { ApiError, apiFetch } from "./client";
 
 export const getPostsByLocation = (locationId: string, page = 1) =>
   apiFetch<PaginatedResponse<Post>>(`/posts/by-location/${encodeURIComponent(locationId)}`, {
@@ -30,3 +31,20 @@ export const setPostLiked = (postId: string, liked: boolean) =>
     `/posts/${encodeURIComponent(postId)}/like`,
     { method: liked ? "POST" : "DELETE" }
   );
+
+/**
+ * One post. Resolves null when it does not exist OR is not visible to the caller
+ * (the API answers 404), and when the id is not a UUID (the API answers 400).
+ */
+export async function getPostById(id: string): Promise<Post | null> {
+  try {
+    return await apiFetch<Post>(`/posts/${encodeURIComponent(id)}`);
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 400)) return null;
+    throw error;
+  }
+}
+
+/** Requires login. `location_id` must be an existing location (see createLocation). */
+export const createPost = (input: CreatePostInput) =>
+  apiFetch<Post>("/posts", { method: "POST", body: input });

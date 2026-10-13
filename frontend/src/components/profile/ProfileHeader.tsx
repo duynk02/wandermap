@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { getAvatarUrl } from "@/lib/utils";
 import type { Profile } from "@/types";
+import { BackButton, SettingsMenu } from "./ProfileHeaderActions";
 
 interface ProfileHeaderProps {
   profile: Profile;
@@ -9,7 +10,11 @@ interface ProfileHeaderProps {
 export function ProfileHeader({ profile }: ProfileHeaderProps) {
   return (
     <header className="bg-gradient-to-b from-brand-900 to-brand-700 px-6 pb-12 pt-safe">
-      <div className="flex items-end gap-4 pt-8">
+      <div className="flex items-center justify-between pt-4">
+        <BackButton />
+        <SettingsMenu profileId={profile.id} />
+      </div>
+      <div className="flex items-end gap-4 mt-6">
         <div className="relative">
           <div className="h-20 w-20 overflow-hidden rounded-3xl ring-4 ring-white/20 shadow-xl">
             <Image
@@ -18,6 +23,7 @@ export function ProfileHeader({ profile }: ProfileHeaderProps) {
               width={80}
               height={80}
               className="object-cover"
+              unoptimized
             />
           </div>
         </div>

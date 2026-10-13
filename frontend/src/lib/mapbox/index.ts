@@ -54,6 +54,8 @@ export interface GeocodingResult {
   address: string;
   coordinates: { lat: number; lng: number };
   category?: string;
+  city?: string;
+  country?: string;
 }
 
 export async function geocodeSearch(query: string): Promise<GeocodingResult[]> {
@@ -65,15 +67,26 @@ export async function geocodeSearch(query: string): Promise<GeocodingResult[]> {
 
   const data = await res.json();
 
-  return data.features.map((feature: any) => ({
-    place_id: feature.id,
-    name: feature.text,
-    address: feature.place_name,
-    coordinates: {
-      lng: feature.center[0],
-      lat: feature.center[1],
-    },
-  }));
+  return data.features.map((feature: any) => {
+    const context: { id: string; text: string }[] = feature.context ?? [];
+    const fromContext = (prefix: string) =>
+      context.find((c) => String(c.id).startsWith(prefix))?.text;
+    const isPlace = Array.isArray(feature.place_type) && feature.place_type.includes("place");
+
+    return {
+      place_id: feature.id,
+      name: feature.text,
+      address: feature.place_name,
+      coordinates: {
+        lng: feature.center[0],
+        lat: feature.center[1],
+      },
+      city: isPlace
+        ? feature.text
+        : (fromContext("place") ?? fromContext("locality") ?? fromContext("district")),
+      country: fromContext("country"),
+    };
+  });
 }
 
 // ── Distance ─────────────────────────────────────────────────────────────────
