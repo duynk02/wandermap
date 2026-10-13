@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.5
+    container_name: wandermap-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wandermap
+      POSTGRES_USER: wandermap
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD} # Local development only; override outside development
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - wandermap_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  wandermap_pgdata:
