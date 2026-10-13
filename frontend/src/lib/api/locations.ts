@@ -1,0 +1,49 @@
+import type { Location, LocationFilters, MapBounds } from "@/types";
+import { apiFetch, nullOn404 } from "./client";
+
+const wrapLng = (lng: number) => ((((lng + 180) % 360) + 360) % 360) - 180;
+const clampLat = (lat: number) => Math.max(-90, Math.min(90, lat));
+
+/**
+ * The API validates longitudes to [-180, 180], but Mapbox reports values outside that range
+ * when the world repeats (zoomed out / panned across the antimeridian). Normalise first;
+ * west > east after wrapping is handled server-side as an antimeridian crossing.
+ */
+export function normalizeBounds(bounds: MapBounds): MapBounds {
+  const spansWorld = bounds.east - bounds.west >= 360;
+  return {
+    north: clampLat(bounds.north),
+    south: clampLat(bounds.south),
+    west: spansWorld ? -180 : wrapLng(bounds.west),
+    east: spansWorld ? 180 : wrapLng(bounds.east),
+  };
+}
+
+/** Pins inside the current map viewport (PostGIS bounding-box query on the API). */
+export function getLocationsInViewport(
+  bounds: MapBounds,
+  filters?: LocationFilters,
+  limit = 200
+): Promise<Location[]> {
+  const { north, south, east, west } = normalizeBounds(bounds);
+  // `searchQuery` is deliberately not sent: the viewport endpoint has no text search and
+  // rejects unknown parameters.
+  return apiFetch<Location[]>("/locations/in-viewport", {
+    query: {
+      north,
+      south,
+      east,
+      west,
+      limit,
+      category: filters?.category,
+      minRating: filters?.minRating,
+      country: filters?.country,
+    },
+  });
+}
+
+export const getTrendingLocations = (limit = 50) =>
+  apiFetch<Location[]>("/locations/trending", { query: { limit } });
+
+export const getLocationById = (id: string) =>
+  nullOn404(apiFetch<Location>(`/locations/${encodeURIComponent(id)}`));
