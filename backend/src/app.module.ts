@@ -10,8 +10,8 @@ import { UsersModule } from './users/users.module';
 import { LocationsModule } from './locations/locations.module';
 import { PostsModule } from './posts/posts.module';
 import { ItinerariesModule } from './itineraries/itineraries.module';
-import {PlacesModule} from './places/places.module';
-import {UploadsModule} from './uploads/uploads.module';
+import { PlacesModule } from './places/places.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -29,4 +29,4 @@ import {UploadsModule} from './uploads/uploads.module';
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
-export class AppModule {}
+export class AppModule { }

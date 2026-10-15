@@ -5,6 +5,8 @@ import { useMap } from "@/hooks/useMap";
 import { ClusterLayer } from "./ClusterLayer";
 import { TrendingPins } from "./TrendingPins";
 import { MAPBOX_STYLE } from "@/lib/mapbox";
+import { useEffect } from "react";
+import { useMapStore } from "@/stores/mapStore";
 import type { Location } from "@/types";
 
 interface MapCanvasProps {
@@ -13,6 +15,24 @@ interface MapCanvasProps {
 
 export function MapCanvas({ initialLocations }: MapCanvasProps) {
   const { mapRef, viewport, getClusteredPins, onMoveEnd } = useMap();
+
+  const flyToTarget = useMapStore((s) => s.flyToTarget);
+  const clearFlyToTarget = useMapStore((s) => s.clearFlyToTarget);
+
+  useEffect(() => {
+    if (!flyToTarget || !mapRef.current) return;
+
+    mapRef.current.flyTo({
+      center: [
+        flyToTarget.longitude,
+        flyToTarget.latitude,
+      ],
+      zoom: flyToTarget.zoom,
+      duration: 1200,
+    });
+
+    clearFlyToTarget();
+  }, [flyToTarget, mapRef, clearFlyToTarget]);
 
   return (
     <Map

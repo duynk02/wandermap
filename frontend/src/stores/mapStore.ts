@@ -26,6 +26,7 @@ interface MapState {
   // Hovered pin (for hover effects)
   hoveredLocationId: string | null;
   setHoveredLocation: (id: string | null) => void;
+
 }
 
 const defaultFilters: LocationFilters = {
@@ -55,10 +56,11 @@ export const useMapStore = create<MapState>()(
       isDrawerOpen: false,
       setDrawerOpen: (open) =>
         set({ isDrawerOpen: open, selectedLocationId: open ? undefined : null }),
-
+      // Hovered pin (for hover effects)
       hoveredLocationId: null,
       setHoveredLocation: (id) => set({ hoveredLocationId: id }),
     }),
+
     { name: "wandermap-map-store" }
   )
 );

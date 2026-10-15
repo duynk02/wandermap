@@ -1,117 +1,348 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Search, MapPin, PlusCircle, User } from "lucide-react";
+import { useEffect, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Search, MapPin, PlusCircle, User, Loader2, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+
 import { useAuth } from "@/hooks/useAuth";
 import { useMap } from "@/hooks/useMap";
-import { geocodeSearch, type GeocodingResult } from "@/lib/mapbox";
-import { useDebounce } from "@/hooks/useDebounce";
-import { ROUTES } from "@/constants";
+import { searchPlaces } from "@/lib/api";
+import { useMapStore } from "@/stores/mapStore";
+import { LOCATION_CATEGORIES, ROUTES } from "@/constants";
 import { cn } from "@/lib/utils";
+
+type SearchScope = "vn" | "world";
+
+const iconOf = (category: string) =>
+  LOCATION_CATEGORIES.find((item) => item.value === category)?.icon ?? "📍";
 
 export function MapTopbar() {
   const { isAuthenticated, profile } = useAuth();
   const { flyTo } = useMap();
+  const viewport = useMapStore((state) => state.viewport);
+
+  const [input, setInput] = useState("");
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<GeocodingResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [scope, setScope] = useState<SearchScope>("vn");
+  const [isOpen, setIsOpen] = useState(false);
 
-  const debouncedSearch = useDebounce(async (q: string) => {
-    if (q.length < 2) { setResults([]); return; }
-    setIsSearching(true);
-    try {
-      const r = await geocodeSearch(q);
-      setResults(r);
-    } finally {
-      setIsSearching(false);
+  // Debounce giống LocationPicker.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const timer = window.setTimeout(() => {
+      setQuery(input.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [input, isOpen]);
+
+  // Ưu tiên các địa điểm gần khu vực bản đồ hiện tại.
+  const lat = Number(viewport.latitude.toFixed(1));
+  const lng = Number(viewport.longitude.toFixed(1));
+
+  const enabled = isOpen && query.length >= 2;
+  const isDebouncing = input.trim() !== query;
+
+  const {
+    data,
+    isFetching,
+    isError,
+  } = useQuery({
+    queryKey: ["place-search", scope, query, lat, lng],
+    queryFn: ({ signal }) =>
+      searchPlaces({ q: query, scope, lat, lng }, signal),
+    enabled,
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+
+  const existing = data?.existing ?? [];
+  const external = data?.external ?? [];
+
+  const resultsReady = enabled && !isDebouncing;
+  const isSearching =
+    isOpen &&
+    input.trim().length >= 2 &&
+    (isDebouncing || (enabled && isFetching));
+
+  const nothing =
+    resultsReady &&
+    !isFetching &&
+    !isError &&
+    existing.length === 0 &&
+    external.length === 0;
+
+  const handleSelect = (
+    name: string,
+    lat: number,
+    lng: number,
+  ) => {
+    console.log("Selected place:", name);
+    console.log("Latitude:", lat);
+    console.log("Longitude:", lng);
+
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      console.error("Invalid coordinates:", { lat, lng });
+      return;
     }
-  }, 400);
 
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setQuery(e.target.value);
-    debouncedSearch(e.target.value);
+    flyTo(lat, lng);
+
+    setInput(name);
+    setQuery("");
+    setIsOpen(false);
   };
 
-  const handleSelect = (result: GeocodingResult) => {
-    flyTo(result.coordinates.lng, result.coordinates.lat, 13);
-    setQuery(result.name);
-    setResults([]);
+  const handleInput = (value: string) => {
+    setInput(value);
+    setIsOpen(true);
   };
 
   return (
     <div className="flex items-start gap-3 p-4">
       {/* Search bar */}
-      <div className="relative flex-1 max-w-lg">
-        <div className="flex items-center gap-2 rounded-2xl bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm dark:bg-surface-elevated/95">
+      <div className="relative w-full max-w-lg flex-1">
+        <div
+          className={cn(
+            "flex items-center gap-2 rounded-2xl bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm",
+            "dark:bg-surface-elevated/95",
+            isOpen && "ring-1 ring-brand-500/30",
+          )}
+        >
           <Search className="h-4 w-4 shrink-0 text-ink-subtle" />
+
           <input
             type="text"
-            value={query}
-            onChange={handleInput}
+            value={input}
+            onChange={(event) => handleInput(event.target.value)}
+            onFocus={() => setIsOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setIsOpen(false);
+              }
+            }}
             placeholder="Tìm địa điểm, thành phố..."
-            className="flex-1 bg-transparent text-sm text-ink placeholder:text-ink-subtle outline-none"
+            aria-label="Tìm kiếm địa điểm"
+            aria-expanded={isOpen && input.trim().length >= 2}
+            className="flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
           />
+
           {isSearching && (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-500" />
+          )}
+
+          {input && (
+            <button
+              type="button"
+              onClick={() => {
+                setInput("");
+                setQuery("");
+                setIsOpen(true);
+              }}
+              aria-label="Xóa nội dung tìm kiếm"
+              className="rounded-full p-1 text-ink-subtle transition-colors hover:bg-surface-muted hover:text-ink"
+            >
+              <X className="h-4 w-4" />
+            </button>
           )}
         </div>
 
-        {/* Autocomplete dropdown */}
+        {/* Search results */}
         <AnimatePresence>
-          {results.length > 0 && (
-            <motion.ul
+          {isOpen && input.trim().length >= 2 && (
+            <motion.div
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              className="absolute top-full mt-2 w-full rounded-xl bg-white shadow-xl dark:bg-surface-elevated overflow-hidden z-50"
+              className="absolute top-full z-50 mt-2 max-h-[min(70vh,32rem)] w-full overflow-y-auto rounded-xl border border-border bg-white p-2 shadow-xl dark:bg-surface-elevated"
             >
-              {results.map((r) => (
-                <li key={r.place_id}>
+              {/* Search scope */}
+              <div className="flex gap-2 px-1 pb-2">
+                {(
+                  [
+                    ["vn", "🇻🇳 Việt Nam"],
+                    ["world", "🌏 Toàn thế giới"],
+                  ] as const
+                ).map(([id, label]) => (
                   <button
-                    onClick={() => handleSelect(r)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-surface-muted transition-colors"
+                    key={id}
+                    type="button"
+                    onClick={() => setScope(id)}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                      scope === id
+                        ? "bg-brand-500 text-white"
+                        : "bg-surface-muted text-ink-muted hover:bg-border",
+                    )}
                   >
-                    <MapPin className="h-4 w-4 shrink-0 text-brand-500" />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-ink">{r.name}</p>
-                      <p className="truncate text-xs text-ink-muted">{r.address}</p>
-                    </div>
+                    {label}
                   </button>
-                </li>
-              ))}
-            </motion.ul>
+                ))}
+              </div>
+
+              {isError && (
+                <p className="px-3 py-3 text-sm text-red-500">
+                  Không thể tìm kiếm địa điểm. Vui lòng thử lại.
+                </p>
+              )}
+
+              {!isError && !resultsReady && (
+                <div className="flex items-center gap-2 px-3 py-4 text-sm text-ink-muted">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Đang tìm địa điểm...
+                </div>
+              )}
+
+              {resultsReady && (
+                <>
+                  {/* Existing WanderMap locations */}
+                  {existing.length > 0 && (
+                    <section>
+                      <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+                        Đã có trên WanderMap
+                      </p>
+
+                      {existing.map((location) => (
+                        <button
+                          key={location.id}
+                          type="button"
+                          onClick={() =>
+                            handleSelect(
+                              location.name,
+                              location.coordinates.lat,
+                              location.coordinates.lng,
+                            )
+                          }
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-surface-muted"
+                        >
+                          <span className="shrink-0">
+                            {iconOf(location.category)}
+                          </span>
+
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-ink">
+                              {location.name}
+                            </span>
+                            <span className="block truncate text-xs text-ink-muted">
+                              {[location.city, location.country]
+                                .filter(Boolean)
+                                .join(", ") || location.address}
+                            </span>
+                          </span>
+
+                          <MapPin className="h-4 w-4 shrink-0 text-brand-500" />
+                        </button>
+                      ))}
+                    </section>
+                  )}
+
+                  {/* External map locations */}
+                  {external.length > 0 && (
+                    <section>
+                      <p className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-ink-subtle">
+                        Địa điểm khác
+                      </p>
+
+                      {external.map((place) => (
+                        <button
+                          key={place.key}
+                          type="button"
+                          onClick={() =>
+                            handleSelect(
+                              place.name,
+                              place.coordinates.lat,
+                              place.coordinates.lng,
+                            )
+                          }
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-surface-muted"
+                        >
+                          <span className="shrink-0">
+                            {iconOf(place.category)}
+                          </span>
+
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-ink">
+                              {place.name}
+                            </span>
+                            <span className="block truncate text-xs text-ink-muted">
+                              {place.address || place.kind}
+                            </span>
+                          </span>
+
+                          <MapPin className="h-4 w-4 shrink-0 text-brand-500" />
+                        </button>
+                      ))}
+                    </section>
+                  )}
+
+                  {data && !data.externalAvailable && (
+                    <p className="px-3 py-2 text-xs text-amber-600">
+                      Chưa tải được gợi ý từ nguồn bản đồ bên ngoài. Bạn vẫn có
+                      thể chọn địa điểm đã có trên WanderMap.
+                    </p>
+                  )}
+
+                  {nothing && (
+                    <p className="px-3 py-4 text-sm text-ink-muted">
+                      Không tìm thấy địa điểm. Thử bỏ bớt từ khóa hoặc chuyển
+                      sang phạm vi “Toàn thế giới”.
+                    </p>
+                  )}
+
+                  {external.length > 0 && (
+                    <p className="px-3 pb-1 pt-2 text-[10px] text-ink-subtle">
+                      © OpenStreetMap contributors
+                    </p>
+                  )}
+                </>
+              )}
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {isAuthenticated ? (
           <>
-            <Link href={ROUTES.newPost}>
-              <button className="flex items-center gap-2 rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-600 transition-colors">
-                <PlusCircle className="h-4 w-4" />
-                <span className="hidden sm:inline">Đăng bài</span>
-              </button>
+            <Link
+              href={ROUTES.newPost}
+              className="flex items-center gap-2 rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-brand-600"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Đăng bài</span>
             </Link>
-            <Link href={ROUTES.profile(profile?.username ?? "")}>
-              <div className="h-10 w-10 overflow-hidden rounded-2xl shadow-lg ring-2 ring-white">
-                <img
-                  src={profile?.avatar_url ?? "/icons/default-avatar.svg"}
-                  alt={profile?.display_name}
-                  className="h-full w-full object-cover"
-                />
-              </div>
+
+            <Link
+              href={ROUTES.profile(profile?.username ?? "")}
+              aria-label="Hồ sơ cá nhân"
+              className="h-10 w-10 overflow-hidden rounded-2xl shadow-lg ring-2 ring-white"
+            >
+              <img
+                src={profile?.avatar_url ?? "/icons/default-avatar.svg"}
+                alt={profile?.display_name ?? "Ảnh đại diện"}
+                className="h-full w-full object-cover"
+              />
             </Link>
           </>
         ) : (
-          <Link href={ROUTES.login}>
-            <button className="flex items-center gap-2 rounded-2xl bg-white/95 px-4 py-3 text-sm font-semibold text-ink shadow-lg backdrop-blur-sm hover:bg-white transition-colors">
-              <User className="h-4 w-4" />
-              Đăng nhập
-            </button>
+          <Link
+            href={ROUTES.login}
+            className="flex items-center gap-2 rounded-2xl bg-white/95 px-4 py-3 text-sm font-semibold text-ink shadow-lg backdrop-blur-sm transition-colors hover:bg-white"
+          >
+            <User className="h-4 w-4" />
+            Đăng nhập
           </Link>
         )}
       </div>
