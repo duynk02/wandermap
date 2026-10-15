@@ -116,14 +116,17 @@ async function toApiError(res: Response): Promise<ApiError> {
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, query, retryOnUnauthorized = true, signal } = options;
 
+  // FormData (file uploads): let the browser set the multipart Content-Type with its boundary.
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+
   const send = () => {
     const headers: Record<string, string> = { Accept: "application/json" };
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
     return fetch(buildUrl(path, query), {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined :isForm ? (body as FormData) : JSON.stringify(body),
       credentials: "include",
       cache: isServer() ? "no-store" : undefined,
       signal,

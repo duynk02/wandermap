@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { normalizeVietnamese } from '../common/text';
 import { DatabaseService } from '../database/database.service';
 import { CreateLocationDto } from './dto/create-location.dto';
 import { LocationQueryDto, ViewportQueryDto } from './dto/location-query.dto';
@@ -9,7 +10,7 @@ const LOCATION_FIELDS = `l.id, l.name, l.address, l.country, l.city, l.category,
 
 @Injectable()
 export class LocationsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly db: DatabaseService) { }
 
   async list(query: LocationQueryDto) {
     const page = query.page ?? 1;
@@ -21,12 +22,17 @@ export class LocationsService {
     if (query.minRating !== undefined) add((i) => `l.avg_rating >= $${i}`, query.minRating);
     if (query.country) add((i) => `l.country ILIKE $${i}`, query.country);
     if (query.city) add((i) => `l.city ILIKE $${i}`, query.city);
-    if (query.search) add((i) => `(l.name ILIKE $${i} OR COALESCE(l.city, '') ILIKE $${i} OR COALESCE(l.country, '') ILIKE $${i})`, `%${query.search}%`);
+    let rank = '';
+    if (query.search && normalizeVietnamese(query.search)) {
+      const search = this.searchClause(query.search, values);
+      conditions.push(search.clause);
+      rank = `${search.rank} DESC,`;
+    }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const offset = (page - 1) * pageSize;
     const dataQuery = this.db.query(
       `SELECT ${LOCATION_FIELDS} FROM locations l ${where}
-       ORDER BY l.trending_score DESC, l.post_count DESC, l.created_at DESC
+      ORDER BY ${rank}l.trending_score DESC, l.post_count DESC, l.created_at DESC
        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
       [...values, pageSize, offset],
     );
@@ -34,6 +40,34 @@ export class LocationsService {
     const [data, count] = await Promise.all([dataQuery, countQuery]);
     const total = Number(count.rows[0]?.count ?? 0);
     return { data: data.rows, count: total, page, pageSize, hasMore: offset + data.rows.length < total };
+  }
+
+  /** 
+   * Accent-insensitive match: every word must appear in search_text (see migration 002),
+   * OR the whole phrase is trigram-similar (tolerates typos). Pushes its parameters onto `values`.
+   */
+  private searchClause(search: string, values: unknown[]) {
+    const needle = normalizeVietnamese(search);
+    const patterns = needle.split(' ').filter(Boolean).slice(0, 6).map((word) => `%${word.replace(/[\\%_]/g, '\\$&')}%`);
+    values.push(patterns);
+    const patternsIndex = values.length;
+    values.push(needle);
+    const needleIndex = values.length;
+    return {
+      clause: `(l.search_text ILIKE ALL ($${patternsIndex}::text[]) OR l.search_text % $${needleIndex}::text)`,
+      rank: `similarity(l.search_text, $${needleIndex}::text)`,
+    };
+  }
+
+  async suggest(search: string, limit = 5) {
+    const values: unknown[] = [];
+    const { clause, rank } = this.searchClause(search, values);
+    values.push(Math.min(Math.max(limit, 1), 20));
+    const result = await this.db.query(
+      `SELECT ${LOCATION_FIELDS} FROM locations l WHERE ${clause}
+      ORDER BY ${rank} DESC, l.post_count DESC, l.trending_score DESC LIMIT $${values.length}`, values,
+    );
+    return result.rows as { id: string; name: string; google_place_id: string | null; coordinates: { lat: number; lng: number } }[];
   }
 
   async inViewport(query: ViewportQueryDto) {
@@ -82,7 +116,7 @@ export class LocationsService {
        ON CONFLICT (google_place_id) DO UPDATE SET google_place_id = EXCLUDED.google_place_id
        RETURNING id`,
       [dto.name.trim(), dto.address?.trim() || null, dto.coordinates.lng, dto.coordinates.lat, dto.country?.trim() || null,
-        dto.city?.trim() || null, category, dto.google_place_id?.trim() || null],
+      dto.city?.trim() || null, category, dto.google_place_id?.trim() || null],
     );
     return this.getById(result.rows[0].id);
   }

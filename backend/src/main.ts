@@ -2,15 +2,17 @@ import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import {NestExpressApplication} from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { randomUUID } from 'node:crypto';
 import { AppModule } from './app.module';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter';
+import {UploadsService} from './uploads/uploads.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true});
   const config = app.get(ConfigService);
   app.enableShutdownHooks();
   const origins = config.get<string>('CORS_ORIGINS', 'http://localhost:3000')
@@ -42,6 +44,21 @@ async function bootstrap() {
     exposedHeaders: ['X-Request-Id'],
     maxAge: 600,
   });
+
+
+// Uploaded images. Files are named by content hash, so they can be cached forever. helmet defaults to
+// Cross-Origin-Resource-Policy: same-origin, which would block <img> tags on the web app's origin.
+app.useStaticAssets(app.get(UploadsService).rootDir, {
+  prefix: '/uploads',
+  index: false,
+  dotfiles: 'deny',
+  maxAge: '365d',
+  immutable: true,
+  setHeaders: (res) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  },
+})
+
   app.setGlobalPrefix('api/v1');
   // The global prefix is explicitly versioned as /api/v1. Do not also enable URI versioning,
   // which would accidentally produce /api/v1/v1 routes.

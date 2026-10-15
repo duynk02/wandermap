@@ -10,6 +10,9 @@ export function validateEnv(input: Record<string, unknown>) {
   const cookieSecure = cookieSecureSetting === 'true' || nodeEnv === 'production';
   const cookieSameSite = String(input.COOKIE_SAME_SITE ?? 'lax').toLowerCase();
 
+  const uploadPublicUrl = String(input.UPLOAD_PUBLIC_URL ?? '');
+  const photonUrl = String(input.PHOTON_URL ?? '');
+
   const errors: string[] = [];
   if (!['development', 'test', 'production'].includes(nodeEnv)) errors.push('NODE_ENV must be development, test, or production.');
   if (!Number.isInteger(port) || port < 1 || port > 65535) errors.push('PORT must be an integer between 1 and 65535.');
@@ -21,6 +24,8 @@ export function validateEnv(input: Record<string, unknown>) {
   if (!['true', 'false'].includes(cookieSecureSetting)) errors.push('COOKIE_SECURE must be true or false.');
   if (!['lax', 'strict', 'none'].includes(cookieSameSite)) errors.push('COOKIE_SAME_SITE must be lax, strict, or none.');
   if (cookieSameSite === 'none' && !cookieSecure) errors.push('COOKIE_SAME_SITE=none requires COOKIE_SECURE=true (HTTPS).');
+  if (uploadPublicUrl && !/^https?:\/\/.+/.test(uploadPublicUrl)) errors.push('UPLOAD_PUBLIC_URL must be a valid URL starting with http:// or https://.');
+  if (photonUrl && !/^https?:\/\/.+/.test(photonUrl)) errors.push('PHOTON_URL must be a valid URL starting with http:// or https://.');
   if (errors.length) throw new Error(`Invalid environment configuration:\n- ${errors.join('\n- ')}`);
 
   return {

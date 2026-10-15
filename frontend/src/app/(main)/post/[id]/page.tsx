@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getPostById } from "@/lib/api";
 import { PostDetail } from "@/components/post/PostDetail";
 import { PostDetailFallback } from "@/components/post/PostDetailFallback";
+import {PostCard} from "@/components/post/PostCard";
 
 interface Props {
   params: Promise<{ id: string }>;

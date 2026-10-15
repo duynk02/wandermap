@@ -18,6 +18,12 @@ interface PostCardProps {
   compact?: boolean; // Smaller version for drawer preview
 }
 
+// Uploaded images are already resized WebP served by our own API, so the Next.js optimizer adds nothing
+// (and would need the API host in `remotePatterns`). SVG avatars cannot go through the optimizer at all.
+const skipOptimizer = (src: string) =>
+  /\/uploads\/[0-9a-f]{2}\/[0-9a-f]{32}\.webp$/.test(src) || src.includes("api.dicebear.com");
+
+
 export function PostCard({ post, compact = false }: PostCardProps) {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
@@ -71,6 +77,7 @@ export function PostCard({ post, compact = false }: PostCardProps) {
           )}>
             <Image
               src={getPostImageUrl(firstImage)}
+              unoptimized={skipOptimizer(getPostImageUrl(firstImage))}
               alt={post.content.slice(0, 50)}
               fill
               className="object-cover transition-transform duration-300 group-hover:scale-105"
@@ -96,7 +103,7 @@ export function PostCard({ post, compact = false }: PostCardProps) {
               width={compact ? 20 : 28}
               height={compact ? 20 : 28}
               className="rounded-full object-cover"
-              unoptimized
+              unoptimized={skipOptimizer(getAvatarUrl(post.author.avatar_url, post.author.username))}
             />
             <span className={cn("font-medium text-ink hover:text-brand-500 transition-colors", compact ? "text-xs" : "text-sm")}>
               {post.author.display_name}
