@@ -4,7 +4,6 @@
 
 Mạng xã hội du lịch dựa trên bản đồ — check-in, chia sẻ trải nghiệm, khám phá địa điểm mới.
 
-> **Trạng thái:** Frontend Next.js đã được chuyển sang gọi API NestJS tại `backend/` (không còn Supabase ở runtime). Thư mục `supabase/` chỉ còn là tham chiếu cũ cho việc chuyển dữ liệu; **không xóa project Supabase cũ** cho đến khi dữ liệu production được chuyển và xác minh.
 
 ---
 

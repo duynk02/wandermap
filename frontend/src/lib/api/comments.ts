@@ -1,5 +1,5 @@
 import { COMMENTS_PAGE_SIZE } from "@/constants";
-import type { CreateCommentResult, PaginatedResponse, PostComment } from "@/types";
+import type { CreateCommentResult, DeleteCommentResult, PaginatedResponse, PostComment } from "@/types";
 import { apiFetch } from "./client";
 
 /** Top-level comments of a post, newest first. Public for visible posts. */
@@ -29,3 +29,14 @@ export const setCommentLiked = (commentId: string, liked: boolean) =>
     `/comments/${encodeURIComponent(commentId)}/like`,
     { method: liked ? "POST" : "DELETE" }
   );
+
+/** Requires login. Only the comment's author can edit it. */
+export const updateComment = (commentId: string, content: string) =>
+  apiFetch<PostComment>(`/comments/${encodeURIComponent(commentId)}`, {
+    method: "PATCH",
+    body: { content },
+  });
+
+/** Requires login. Only the comment's author can delete it. */
+export const deleteComment = (commentId: string) =>
+  apiFetch<DeleteCommentResult>(`/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" });

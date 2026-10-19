@@ -1,11 +1,12 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PostsService } from '../posts/posts.service';
 import { CommentQueryDto } from './dto/comment-query.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 
 // $1 is always the viewer id (null for guests).
-const COMMENT_FIELDS = `c.id, c.post_id, c.parent_id, c.content, c.likes_count, c.reply_count, c.created_at,
+const COMMENT_FIELDS = `c.id, c.post_id, c.parent_id, c.content, c.likes_count, c.reply_count, c.created_at, c.edited_at,
   json_build_object('id', a.id, 'username', a.username, 'display_name', a.display_name, 'avatar_url', a.avatar_url) AS author,
   ($1::uuid IS NOT NULL AND EXISTS (SELECT 1 FROM comment_likes cl WHERE cl.comment_id = c.id AND cl.user_id = $1)) AS is_liked`;
 
@@ -28,6 +29,7 @@ export interface CommentRow extends CommentRef {
     likes_count: number;
     reply_count: number;
     created_at: Date;
+    edited_at: Date | null;
     author: CommentAuthor;
     is_liked: boolean;
 }
@@ -45,6 +47,14 @@ export interface CreateCommentResult {
     post: { id: string; comments_count: number };
     parent: { id: string; reply_count: number } | null;
 }
+
+/** Counters after a delete, so clients can update their caches without refetching. */
+export interface DeleteCommentResult {
+    deleted: number;
+    post: { id: string; comments_count: number };
+    parent: { id: string; reply_count: number } | null;
+}
+
 
 @Injectable()
 export class CommentsService {
@@ -145,6 +155,62 @@ export class CommentsService {
         }
         const result = await this.db.query<{ likes_count: number }>('SELECT likes_count FROM comments WHERE id = $1', [commentId]);
         return { liked, likes_count: result.rows[0]?.likes_count ?? 0 };
+    }
+
+    /** Only the author can change the text. */
+    async update(userId: string, commentId: string, dto: UpdateCommentDto): Promise<CommentRow> {
+        const comment = await this.findWithOwners(commentId);
+        await this.posts.assertVisible(comment.post_id, userId);
+        if (comment.author_id !== userId) throw new ForbiddenException('You can only edit your own comments.');
+
+        const content = dto.content.trim();
+        if (!content) throw new BadRequestException('content must not be empty');
+        // Saving unchanged text does not mark the comment as edited.
+        await this.db.query(
+            'UPDATE comments SET content = $2, edited_at = CASE WHEN content = $2 THEN edited_at ELSE now() END WHERE id = $1',
+            [commentId, content]
+        );
+        return this.getComment(commentId, userId);
+    }
+
+
+    /**
+    * The comment's author and the author of the post it is on can delete it. Deleting a top-level
+    * comment also deletes its replies, likes and notifications (cascade).
+   */
+    async remove(userId: string, commentId: string): Promise<DeleteCommentResult> {
+        const comment = await this.findWithOwners(commentId);
+        await this.posts.assertVisible(comment.post_id, userId);
+        if (comment.author_id !== userId && comment.post_author_id !== userId) {
+            throw new ForbiddenException('You can only delete your own comments or comments on your own posts.');
+        }
+
+        const replies = await this.db.query<{ reply_count: number }>('SELECT reply_count FROM comments WHERE id = $1', [commentId]);
+        await this.db.query('DELETE FROM comments WHERE id = $1', [commentId]);
+
+        const [post, parent] = await Promise.all([
+            this.db.query<{ comments_count: number }>('SELECT comments_count FROM posts WHERE id = $1', [comment.post_id]),
+            comment.parent_id
+            ? this.db.query<{ id: string; reply_count: number }>('SELECT id, reply_count FROM comments WHERE id = $1', [comment.parent_id])
+            : Promise.resolve(null),
+        ]);
+
+        const parentRow = parent?.rows[0] ?? null;
+        return {
+            deleted: 1 + (replies.rows[0]?.reply_count ?? 0),
+            post: { id: comment.post_id, comments_count: post.rows[0]?.comments_count ?? 0 },
+            parent: parentRow ? { id: parentRow.id, reply_count: parentRow.reply_count } : null,
+        };
+    }
+
+    private async findWithOwners(commentId: string): Promise<CommentRef & { author_id: string; post_author_id: string }> {
+        const result = await this.db.query<CommentRef & { author_id: string; post_author_id: string }>(
+            `SELECT c.id, c.post_id, c.parent_id, c.author_id, p.author_id AS post_author_id
+            FROM comments c JOIN posts p ON p.id = c.post_id WHERE c.id = $1`,
+            [commentId],
+        );
+        if (!result.rows[0]) throw new NotFoundException('Comment not found.');
+        return result.rows[0];
     }
 
     private async findComment(commentId: string): Promise<CommentRef> {

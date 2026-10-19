@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AccessTokenGuard } from '../common/guards/access-token.guard';
@@ -8,7 +8,8 @@ import { AuthenticatedUser } from '../common/interfaces';
 import { CommentsService } from './comments.service';
 import { CommentQueryDto } from './dto/comment-query.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
-import type { CommentRow, CreateCommentResult, PaginatedResult } from './comments.service';
+import type { CommentRow, CreateCommentResult, PaginatedResult, DeleteCommentResult } from './comments.service';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 
 @ApiTags('Comments')
 @Controller()
@@ -49,6 +50,31 @@ export class CommentsController {
   ): Promise<PaginatedResult<CommentRow>> {
     return this.comments.listReplies(commentId, query, user?.sub);
   }
+
+  @Patch('comments/:commentId')
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 230, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Edit my own comment' })
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('commentId', new ParseUUIDPipe()) commentId: string,
+    @Body() dto: UpdateCommentDto,
+  ): Promise<CommentRow> {
+    return this.comments.update(user.sub, commentId, dto);
+  }
+
+  @Delete('comments/:commentId')
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete my own comment' })
+  remove(
+    @CurrentUser() user: AuthenticatedUser, 
+    @Param('commentId', new ParseUUIDPipe()) commentId: string
+  ): Promise<DeleteCommentResult> {
+    return this.comments.remove(user.sub, commentId);
+  }
+   
 
   @Post('comments/:commentId/like')
   @UseGuards(AccessTokenGuard)

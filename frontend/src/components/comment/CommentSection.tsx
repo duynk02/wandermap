@@ -8,14 +8,16 @@ import { ApiError, createComment, getComments } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useViewerKey } from "@/hooks/useRequireAuth";
 import { QUERY_KEYS } from "@/constants";
-import type { PostComment } from "@/types";
-import { flattenComments, patchComment, prependComment } from "./comment-cache";
+import type { DeleteCommentResult, PostComment } from "@/types";
+import { flattenComments, patchComment, prependComment, removeComment } from "./comment-cache";
 import { CommentComposer } from "./CommentComposer";
 import { CommentItem } from "./CommentItem";
 
 interface CommentSectionProps {
   postId: string;
-  /** Called with the authoritative comment total after a comment/reply is posted. */
+  /** The post's author may delete any comment on it. */
+  postAuthorId: string;
+  /** Called with the authoritative comment total after a comment is posted or deleted. */
   onCommentsCountChange?: (count: number) => void;
 }
 
@@ -29,9 +31,9 @@ function sendErrorMessage(error: unknown) {
 }
 
 /** Mounted only while the panel is open, so comments are fetched on demand and never for the whole feed. */
-export function CommentSection({ postId, onCommentsCountChange }: CommentSectionProps) {
+export function CommentSection({ postId, postAuthorId, onCommentsCountChange }: CommentSectionProps) {
   const queryClient = useQueryClient();
-  const { isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const viewer = useViewerKey();
   const listKey = QUERY_KEYS.comments.byPost(postId, viewer);
 
@@ -67,6 +69,23 @@ export function CommentSection({ postId, onCommentsCountChange }: CommentSection
     onError: (error) => toast.error(sendErrorMessage(error)),
   });
 
+  const handleDeleted = (comment: PostComment, result: DeleteCommentResult) => {
+    onCommentsCountChange?.(result.post.comments_count);
+    void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.byId(postId) });
+
+    if (!comment.parent_id) {
+      removeComment(queryClient, listKey, comment.id);
+      queryClient.removeQueries({ queryKey: QUERY_KEYS.comments.replies(comment.id, viewer) });
+      setReplyTo((current) => (current?.id === comment.id ? null : current));
+    } else {
+      removeComment(queryClient, QUERY_KEYS.comments.replies(comment.parent_id, viewer), comment.id);
+      if (result.parent) {
+        patchComment(queryClient, listKey, result.parent.id, (c) => ({ ...c, reply_count: result.parent!.reply_count }));
+      }
+    }
+    toast.success("Đã xóa bình luận");
+  };
+
   const toggleReplies = (commentId: string) =>
     setExpanded((current) => {
       const next = new Set(current);
@@ -74,14 +93,17 @@ export function CommentSection({ postId, onCommentsCountChange }: CommentSection
       return next;
     });
 
+  // Which box is busy: the top one (new comment) or the reply box of one comment.
+  const sendingFor = sendMutation.isPending ? (sendMutation.variables?.parent_id ?? null) : undefined;
+
   return (
     <section aria-label="Bình luận" className="border-t border-border px-4 pb-4 pt-3">
       <CommentComposer
-        replyTo={replyTo}
-        onCancelReply={() => setReplyTo(null)}
-        isSubmitting={sendMutation.isPending}
+        replyTo={null}
+        onCancelReply={() => undefined}
+        isSubmitting={sendingFor === null}
         onSubmit={async (content) => {
-          await sendMutation.mutateAsync({ content, parent_id: replyTo?.id });
+          await sendMutation.mutateAsync({ content });
         }}
       />
 
@@ -91,7 +113,16 @@ export function CommentSection({ postId, onCommentsCountChange }: CommentSection
             key={comment.id}
             comment={comment}
             listKey={listKey}
+            viewerId={user?.id}
+            postAuthorId={postAuthorId}
+            onDeleted={handleDeleted}
             onReply={setReplyTo}
+            isReplying={replyTo?.id === comment.id}
+            onCancelReply={() => setReplyTo(null)}
+            onSendReply={async (content) => {
+              await sendMutation.mutateAsync({ content, parent_id: comment.id });
+            }}
+            isSendingReply={sendingFor === comment.id}
             repliesExpanded={expanded.has(comment.id)}
             onToggleReplies={() => toggleReplies(comment.id)}
           />

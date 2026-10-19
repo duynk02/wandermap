@@ -194,7 +194,7 @@ export function FeedPostCard({ post }: { post: Post }) {
 
             {commentsOpen && (
                 <div id={panelId}>
-                    <CommentSection postId={post.id} onCommentsCountChange={setCommentsCount} />
+                    <CommentSection postId={post.id} postAuthorId={post.author_id} onCommentsCountChange={setCommentsCount} />
                 </div>
             )}
         </article>

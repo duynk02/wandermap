@@ -170,6 +170,7 @@ export interface PostComment {
   likes_count: number;
   reply_count: number;
   created_at: string;
+  edited_at: string | null;
   author: CommentAuthor;
   is_liked: boolean;
 }
@@ -180,6 +181,15 @@ export interface CreateCommentResult {
   post: { id: string; comments_count: number };
   parent: { id: string; reply_count: number } | null;
 }
+
+/** Authoritative counters returned when a comment is deleted. */
+export interface DeleteCommentResult {
+  deleted: number;
+  post: { id: string; comments_count: number };
+  parent: { id: string; reply_count: number } | null;
+}
+
+
 
 // Notifications
 export type NotificationType = 'follow' | 'like' | 'comment';

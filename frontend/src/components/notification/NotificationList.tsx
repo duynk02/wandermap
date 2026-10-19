@@ -18,7 +18,7 @@ const TYPE_ICON = {
   follow: { Icon: UserPlus, className: "bg-blue-500" },
 } as const;
 
-function NotificationRow({ item }: { item: NotificationItem }) {
+function NotificationRow({ item, onNavigate }: { item: NotificationItem; onNavigate?: () => void }) {
   const actor = item.actors[0];
   const href = item.type === "follow" && actor ? ROUTES.profile(actor.username) : item.post ? ROUTES.post(item.post.id) : ROUTES.feed;
   const { Icon, className } = TYPE_ICON[item.type];
@@ -27,6 +27,7 @@ function NotificationRow({ item }: { item: NotificationItem }) {
     <li>
       <Link
         href={href}
+        onClick={onNavigate}
         className={cn(
           "flex items-center gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-surface-muted",
           item.is_unread ? "border-brand-500 bg-surface-muted" : "border-transparent"
@@ -61,7 +62,16 @@ function NotificationRow({ item }: { item: NotificationItem }) {
   );
 }
 
-export function NotificationList() {
+interface NotificationListProps {
+  /** "page": the /notifications page. "popover": inside the bell popover (compact, no redirect). */
+  variant?: "page" | "popover";
+  /** Called when a row is clicked (the popover closes itself). */
+  onNavigate?: () => void;
+}
+
+export function NotificationList({ variant = "page", onNavigate }: NotificationListProps) {
+  const isPopover = variant === "popover";
+  const pad = isPopover ? "py-10" : "py-20";
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
@@ -69,10 +79,10 @@ export function NotificationList() {
 
   // The access token only exists in the browser, so guests are sent to login from here.
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+    if (!isPopover && !authLoading && !isAuthenticated) {
       router.replace(`${ROUTES.login}?next=${encodeURIComponent(ROUTES.notifications)}`);
     }
-  }, [authLoading, isAuthenticated, router]);
+  }, [isPopover, authLoading, isAuthenticated, router]);
 
   const query = useInfiniteQuery({
     queryKey: QUERY_KEYS.notifications.list(viewer),
@@ -80,7 +90,8 @@ export function NotificationList() {
     initialPageParam: 1,
     getNextPageParam: (last, pages) => (last.hasMore ? pages.length + 1 : undefined),
     enabled: isAuthenticated,
-    refetchOnWindowFocus: false, // keep the "new" highlight while this page is open
+    refetchOnWindowFocus: false, // keep the "new" highlight while this list is open
+    gcTime: 0, // reopening shows a fresh list instead of the stale highlighted one
   });
 
   const items = (query.data?.pages ?? []).flatMap((page) => page.data).filter(
@@ -103,7 +114,7 @@ export function NotificationList() {
 
   if (authLoading || !isAuthenticated || query.isLoading) {
     return (
-      <div className="flex justify-center py-20">
+      <div className={cn("flex justify-center", pad)}>
         <Loader2 className="h-6 w-6 animate-spin text-brand-500" />
       </div>
     );
@@ -111,7 +122,7 @@ export function NotificationList() {
 
   if (query.isError) {
     return (
-      <div className="py-20 text-center text-ink-muted">
+      <div className={cn("px-4 text-center text-ink-muted", pad)}>
         <p className="font-medium">Không tải được thông báo</p>
         <button
           type="button"
@@ -126,7 +137,7 @@ export function NotificationList() {
 
   if (items.length === 0) {
     return (
-      <div className="py-20 text-center text-ink-muted">
+      <div className={cn("px-4 text-center text-ink-muted", pad)}>
         <p className="mb-3 text-4xl">🔔</p>
         <p className="font-medium">Chưa có thông báo nào</p>
         <p className="mt-1 text-sm">Khi ai đó thích, bình luận hoặc theo dõi bạn, bạn sẽ thấy ở đây.</p>
@@ -136,9 +147,9 @@ export function NotificationList() {
 
   return (
     <>
-      <ul className="divide-y divide-border overflow-hidden rounded-2xl bg-surface-elevated shadow-sm">
+      <ul className={cn("divide-y divide-border", !isPopover && "overflow-hidden rounded-2xl bg-surface-elevated shadow-sm")}>
         {items.map((item) => (
-          <NotificationRow key={item.id} item={item} />
+          <NotificationRow key={item.id} item={item} onNavigate={onNavigate} />
         ))}
       </ul>
 
@@ -147,7 +158,7 @@ export function NotificationList() {
           type="button"
           onClick={() => void query.fetchNextPage()}
           disabled={query.isFetchingNextPage}
-          className="mt-4 w-full rounded-2xl py-3 text-sm font-semibold text-brand-600 transition-colors hover:bg-surface-muted disabled:opacity-60"
+          className={cn("w-full py-3 text-sm font-semibold text-brand-600 transition-colors hover:bg-surface-muted disabled:opacity-60", isPopover ? "" : "mt-4 rounded-2xl")}
         >
           {query.isFetchingNextPage ? "Đang tải..." : "Xem thêm thông báo"}
         </button>

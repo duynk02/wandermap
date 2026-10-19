@@ -47,3 +47,16 @@ export function prependComment(queryClient: QueryClient, key: QueryKey, comment:
     return { ...data, pages: [{ ...first, count: first.count + 1, data: [comment, ...first.data] }, ...rest] };
   });
 }
+
+/** Removes a comment from an already loaded list (no-op when the list is not in the cache). */
+export function removeComment(queryClient: QueryClient, key: QueryKey, commentId: string) {
+  queryClient.setQueryData<CommentPages>(key, (data) =>
+    data && {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        data: page.data.filter((comment) => comment.id !== commentId),
+      })),
+    }
+  );
+}
