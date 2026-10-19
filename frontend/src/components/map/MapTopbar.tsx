@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Search, MapPin, PlusCircle, User, Loader2, X } from "lucide-react";
+import { Search, MapPin, PlusCircle, User, Loader2, X, Newspaper } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
@@ -314,6 +314,14 @@ export function MapTopbar() {
 
       {/* Actions */}
       <div className="flex shrink-0 items-center gap-2">
+        <Link
+          href={ROUTES.feed}
+          aria-label="Bản tin cộng đồng"
+          className="flex items-center gap-2 rounded-2xl bg-white/95 px-4 py-3 text-sm font-semibold text-ink shadow-lg backdrop-blur-sm transition-colors hover:bg-white dark:bg-surface-elevated/95"
+        >
+          <Newspaper className="h-4 w-4" />
+          <span className="hidden sm:inline">Bản tin</span>
+        </Link>
         {isAuthenticated ? (
           <>
             <Link

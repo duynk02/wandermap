@@ -12,6 +12,7 @@ import { PostsModule } from './posts/posts.module';
 import { ItinerariesModule } from './itineraries/itineraries.module';
 import { PlacesModule } from './places/places.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { CommentsModule } from './comments/comments.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { UploadsModule } from './uploads/uploads.module';
     ItinerariesModule,
     PlacesModule,
     UploadsModule,
+    CommentsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

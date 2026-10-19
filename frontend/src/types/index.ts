@@ -72,10 +72,11 @@ export interface Post {
   visibility: PostVisibility;
   likes_count: number;
   saves_count: number;
+  comments_count: number;
   created_at: string;
   updated_at?: string;
   // Joined fields (when fetched with relations)
-  author?: Profile;
+  author?: Profile & { is_following?: boolean };
   location?: Location;
   is_liked?: boolean;
   is_saved?: boolean;
@@ -155,4 +156,27 @@ export interface FeedFilters {
   following?: boolean;
   location_id?: string;
   author_id?: string;
+}
+
+
+//Comments
+export type CommentAuthor = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>;
+/** Named Postcomment to avoid shadowing the DOM `Comment` type. One reply level only. */
+export interface PostComment {
+  id: string;
+  post_id: string;
+  parent_id: string | null;
+  content: string;
+  likes_count: number;
+  reply_count: number;
+  created_at: string;
+  author: CommentAuthor;
+  is_liked: boolean;
+}
+
+/** Authoritative counters returned when a comment/reply is created. */
+export interface CreateCommentResult {
+  comment: PostComment;
+  post: { id: string; comments_count: number };
+  parent: { id: string; reply_count: number } | null;
 }

@@ -6,3 +6,16 @@ export const getProfileByUsername = (username: string) =>
 
 /** Own pins only: the API has no endpoint for another user's pins yet. */
 export const getMyPins = () => apiFetch<UserPin[]>("/users/me/pins");
+
+
+export const followUser = (username: string) =>
+  apiFetch<{ following: boolean; changed: boolean }>(
+    `/users/${encodeURIComponent(username)}/follow`,
+    { method: "POST" }
+  );
+
+export const unfollowUser = (username: string) =>
+  apiFetch<{ following: boolean; changed: boolean }>(
+    `/users/${encodeURIComponent(username)}/follow`,
+    { method: "DELETE" }
+  );

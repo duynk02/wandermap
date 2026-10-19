@@ -4,8 +4,9 @@ import { CreatePostDto, UpdatePostDto } from './dto/create-post.dto';
 import { PostQueryDto } from './dto/post-query.dto';
 
 const POST_FIELDS = `p.id, p.author_id, p.location_id, p.content, p.images, p.rating, p.visited_at, p.visibility,
-  p.likes_count, p.saves_count, p.created_at, p.updated_at,
-  json_build_object('id', author.id, 'username', author.username, 'display_name', author.display_name, 'avatar_url', author.avatar_url) AS author,
+  p.likes_count, p.saves_count, p.comments_count, p.created_at, p.updated_at,
+  json_build_object('id', author.id, 'username', author.username, 'display_name', author.display_name, 'avatar_url', author.avatar_url,
+    'is_following', ($1::uuid IS NOT NULL AND EXISTS (SELECT 1 FROM follows fo WHERE fo.follower_id = $1 AND fo.following_id = author.id))) AS author,
   json_build_object('id', l.id, 'name', l.name, 'city', l.city, 'country', l.country, 'category', l.category,
     'coordinates', json_build_object('lat', ST_Y(l.coordinates), 'lng', ST_X(l.coordinates))) AS location,
   ($1::uuid IS NOT NULL AND EXISTS (SELECT 1 FROM likes li WHERE li.post_id = p.id AND li.user_id = $1)) AS is_liked,
@@ -90,6 +91,17 @@ export class PostsService {
     );
     if (!result.rows[0]) throw new NotFoundException('Post not found.');
     return result.rows[0];
+  }
+
+
+  /** Throws 404 unless the viewer may see the post (same rules as getById, without loading it). */
+  async assertVisible(postId: string, viewerId?: string): Promise<void> {
+    const result = await this.db.query(
+      `SELECT 1 FROM posts p WHERE p.id = $2 AND (p.visibility = 'public' OR p.author_id = $1 OR
+        (p.visibility = 'followers' AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = p.author_id)))`,
+      [viewerId ?? null, postId],
+    );
+    if (!result.rows[0]) throw new NotFoundException('Post not found.');
   }
 
   async create(userId: string, dto: CreatePostDto) {

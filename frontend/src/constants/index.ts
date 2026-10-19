@@ -52,6 +52,12 @@ export const QUERY_KEYS = {
     byLocation: (locationId: string) => ["posts", "location", locationId] as const,
     byId: (id: string) => ["posts", id] as const,
   },
+  comments: {
+    /** Authoritative counters returned when a comment/reply is created. */
+    byPost: (postId: string, viewer: string) => ["comments", "post", postId, viewer] as const,
+    replies: (commentId: string, viewer: string) => ["comments", "replies", commentId, viewer] as const,
+  },
+
   profiles: {
     byUsername: (username: string) => ["profiles", username] as const,
     me: ["profiles", "me"] as const,
@@ -62,6 +68,7 @@ export const QUERY_KEYS = {
 export const ROUTES = {
   home: "/",
   explore: "/explore",
+  feed: "/feed",
   login: "/auth/login",
   register: "/auth/register",
   profile: (username: string) => `/profile/${username}`,
@@ -70,3 +77,8 @@ export const ROUTES = {
   itinerary: (id: string) => `/itinerary/${id}`,
   newPost: "/post/new",
 } as const;
+
+
+// Comments. Keep COMMENT_MAX_LENGTH in sync with the API (backend/src/comments/dto/create-comment.dto.ts).
+export const COMMENT_MAX_LENGTH = 2000;
+export const COMMENTS_PAGE_SIZE = 10; // Number of top-level comments to fetch per page
