@@ -52,6 +52,10 @@ export const QUERY_KEYS = {
     byLocation: (locationId: string) => ["posts", "location", locationId] as const,
     byId: (id: string) => ["posts", id] as const,
   },
+  notifications: {
+    list: (viewer: string) => ["notifications", "list", viewer] as const,
+    unreadCount: (viewer: string) => ["notifications", "unread-count", viewer] as const,
+  },
   comments: {
     /** Authoritative counters returned when a comment/reply is created. */
     byPost: (postId: string, viewer: string) => ["comments", "post", postId, viewer] as const,
@@ -69,6 +73,7 @@ export const ROUTES = {
   home: "/",
   explore: "/explore",
   feed: "/feed",
+  notifications: "/notifications",
   login: "/auth/login",
   register: "/auth/register",
   profile: (username: string) => `/profile/${username}`,

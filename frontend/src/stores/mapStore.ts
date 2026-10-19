@@ -3,6 +3,19 @@ import { devtools } from "zustand/middleware";
 import type { MapViewport, MapBounds, LocationFilters, Location } from "@/types";
 import { DEFAULT_VIEWPORT } from "@/lib/mapbox";
 
+/** One-shot request for the map to fly somewhere (consumed by MapCanvas). */
+export interface FlyToTarget {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+}
+
+export interface SearchPin {
+  name: string;
+  longitude: number;
+  latitude: number;
+}
+
 interface MapState {
   // Viewport
   viewport: MapViewport;
@@ -22,6 +35,16 @@ interface MapState {
   // UI state
   isDrawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
+
+  // Fly-to request (e.g. a chosen search result)
+  flyToTarget: FlyToTarget | null;
+  setFlyToTarget: (target: FlyToTarget) => void;
+  clearFlyToTarget: () => void;
+
+  // Search pins
+  searchPin: SearchPin | null;
+  setSearchPin: (pin: SearchPin) => void;
+  clearSearchPin: () => void;
 
   // Hovered pin (for hover effects)
   hoveredLocationId: string | null;
@@ -56,6 +79,13 @@ export const useMapStore = create<MapState>()(
       isDrawerOpen: false,
       setDrawerOpen: (open) =>
         set({ isDrawerOpen: open, selectedLocationId: open ? undefined : null }),
+      flyToTarget: null,
+      setFlyToTarget: (target) => set({ flyToTarget: { ...target } }),
+      clearFlyToTarget: () => set({ flyToTarget: null }),
+
+      searchPin: null,
+      setSearchPin: (pin) => set({ searchPin: pin }),
+      clearSearchPin: () => set({ searchPin: null }),
       // Hovered pin (for hover effects)
       hoveredLocationId: null,
       setHoveredLocation: (id) => set({ hoveredLocationId: id }),

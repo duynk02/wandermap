@@ -14,7 +14,7 @@ const inputClass =
 
 export function RegisterForm() {
   const router = useRouter();
-  useRedirectIfAuthenticated(ROUTES.explore);
+  useRedirectIfAuthenticated(ROUTES.feed);
 
   const {
     register,
@@ -31,7 +31,7 @@ export function RegisterForm() {
       });
       return;
     }
-    router.push(ROUTES.explore);
+    router.push(ROUTES.feed);
     router.refresh();
   };
 

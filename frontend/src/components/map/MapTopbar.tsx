@@ -7,20 +7,23 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
 import { useAuth } from "@/hooks/useAuth";
-import { useMap } from "@/hooks/useMap";
 import { searchPlaces } from "@/lib/api";
 import { useMapStore } from "@/stores/mapStore";
 import { LOCATION_CATEGORIES, ROUTES } from "@/constants";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notification/NotificationBell";
 
 type SearchScope = "vn" | "world";
+/** Zoom used when a search result is chosen (neighbourhood/POI level). */
+const SEARCH_FLY_ZOOM = 14;
 
 const iconOf = (category: string) =>
   LOCATION_CATEGORIES.find((item) => item.value === category)?.icon ?? "📍";
 
 export function MapTopbar() {
   const { isAuthenticated, profile } = useAuth();
-  const { flyTo } = useMap();
+  const setFlyToTarget = useMapStore((state) => state.setFlyToTarget);
+  const setSearchPin = useMapStore((state) => state.setSearchPin);
   const viewport = useMapStore((state) => state.viewport);
 
   const [input, setInput] = useState("");
@@ -81,9 +84,6 @@ export function MapTopbar() {
     lat: number,
     lng: number,
   ) => {
-    console.log("Selected place:", name);
-    console.log("Latitude:", lat);
-    console.log("Longitude:", lng);
 
     if (
       !Number.isFinite(lat) ||
@@ -97,8 +97,8 @@ export function MapTopbar() {
       return;
     }
 
-    flyTo(lat, lng);
-
+    setFlyToTarget({ longitude: lng, latitude: lat, zoom: SEARCH_FLY_ZOOM });
+    setSearchPin({ name, longitude: lng, latitude: lat });
     setInput(name);
     setQuery("");
     setIsOpen(false);
@@ -324,6 +324,7 @@ export function MapTopbar() {
         </Link>
         {isAuthenticated ? (
           <>
+            <NotificationBell className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 text-ink shadow-lg backdrop-blur-sm transition-colors hover:bg-white dark:bg-surface-elevated/95" />
             <Link
               href={ROUTES.newPost}
               className="flex items-center gap-2 rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-brand-600"

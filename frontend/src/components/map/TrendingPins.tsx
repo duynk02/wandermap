@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Marker } from "react-map-gl";
 import { useMapStore } from "@/stores/mapStore";
 import { CATEGORY_COLORS, CATEGORY_ICONS } from "@/lib/mapbox";
@@ -9,17 +10,16 @@ interface TrendingPinsProps {
   locations: Location[];
 }
 
-// Renders the initial set of trending pins fetched server-side.
-// Once the map loads and ClusterLayer takes over via viewport queries,
-// these become redundant but cause no harm (deduped by location id).
-export function TrendingPins({ locations }: TrendingPinsProps) {
-  const { setSelectedLocation } = useMapStore();
+// Server-rendered trending pins, shown ONLY until the first viewport query returns (MapCanvas
+// unmounts this afterwards). Keeping both layers mounted drew every location twice.
+export const TrendingPins = memo(function TrendingPins({ locations }: TrendingPinsProps) {
+  const setSelectedLocation = useMapStore((s) => s.setSelectedLocation);
 
   return (
     <>
       {locations.map((loc) => {
         const color = CATEGORY_COLORS[loc.category] ?? CATEGORY_COLORS.other;
-        const icon  = CATEGORY_ICONS[loc.category]  ?? "📍";
+        const icon = CATEGORY_ICONS[loc.category] ?? "📍";
 
         return (
           <Marker
@@ -30,7 +30,7 @@ export function TrendingPins({ locations }: TrendingPinsProps) {
           >
             <button
               onClick={() => setSelectedLocation(loc.id)}
-              className="flex flex-col items-center hover:scale-110 transition-transform"
+              className="flex flex-col items-center transition-transform hover:scale-110"
               aria-label={loc.name}
             >
               <div
@@ -46,4 +46,4 @@ export function TrendingPins({ locations }: TrendingPinsProps) {
       })}
     </>
   );
-}
+});

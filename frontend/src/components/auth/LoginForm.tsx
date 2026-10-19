@@ -12,7 +12,7 @@ import { ROUTES } from "@/constants";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = safeNext(searchParams.get("next"), ROUTES.explore);
+  const next = safeNext(searchParams.get("next"), ROUTES.feed);
   useRedirectIfAuthenticated(next);
 
   const {

@@ -4,6 +4,8 @@ import Map, { NavigationControl, GeolocateControl } from "react-map-gl";
 import { useMap } from "@/hooks/useMap";
 import { ClusterLayer } from "./ClusterLayer";
 import { TrendingPins } from "./TrendingPins";
+import { VietnamOverlay } from "./VietnamOverlay";
+import { SearchPin } from "./SearchPin";
 import { MAPBOX_STYLE } from "@/lib/mapbox";
 import { useEffect } from "react";
 import { useMapStore } from "@/stores/mapStore";
@@ -14,7 +16,7 @@ interface MapCanvasProps {
 }
 
 export function MapCanvas({ initialLocations }: MapCanvasProps) {
-  const { mapRef, viewport, getClusteredPins, onMoveEnd } = useMap();
+  const { mapRef, viewport, clusters, isInitialLoad, expandCluster, onMoveEnd } = useMap();
 
   const flyToTarget = useMapStore((s) => s.flyToTarget);
   const clearFlyToTarget = useMapStore((s) => s.clearFlyToTarget);
@@ -57,11 +59,17 @@ export function MapCanvas({ initialLocations }: MapCanvasProps) {
         showAccuracyCircle={false}
       />
 
-      {/* Clustered dynamic pins — loads from viewport */}
-      <ClusterLayer clusters={getClusteredPins()} />
+      {/* Vietnam outline */}
+      <VietnamOverlay />
 
-      {/* Static trending pins for initial SSR data */}
-      <TrendingPins locations={initialLocations} />
+      {/* Clustered dynamic pins — loads from viewport */}
+      <ClusterLayer clusters={clusters} onExpandCluster={expandCluster} />
+
+      {/* Server-rendered trending pins, only until the first viewport query returns */}
+      {isInitialLoad && <TrendingPins locations={initialLocations} />}
+
+      {/* Pin on the place chosen in the search box */}
+      <SearchPin />
     </Map>
   );
 }

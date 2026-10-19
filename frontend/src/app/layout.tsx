@@ -6,6 +6,7 @@ import { QueryProvider } from "@/components/layout/QueryProvider";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { AuthProvider } from "@/components/layout/AuthProvider";
 import { APP_NAME, APP_DESCRIPTION } from "@/constants";
+import "mapbox-gl/dist/mapbox-gl.css";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {

@@ -180,3 +180,19 @@ export interface CreateCommentResult {
   post: { id: string; comments_count: number };
   parent: { id: string; reply_count: number } | null;
 }
+
+// Notifications
+export type NotificationType = 'follow' | 'like' | 'comment';
+
+/** One line of the notification list. All likes (or comments) on one post are a single item. */
+export interface NotificationItem {
+  id: string;
+  type: NotificationType;
+  /** The most recent distinct people (at most 2), newest first. */
+  actors: CommentAuthor[];
+  /** Total number of distinct people in the group. */
+  actor_count: number;
+  post: { id: string; excerpt: string; image: string | null } | null;
+  is_unread: boolean;
+  created_at: string;
+}

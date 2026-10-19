@@ -21,7 +21,7 @@ export function BackButton() {
   const goBack = () => {
     // Nếu mở trực tiếp trang này (không có lịch sử) thì về trang khám phá.
     if (window.history.length > 1) router.back();
-    else router.push("/explore");
+    else router.push("/feed");
   };
 
   return (

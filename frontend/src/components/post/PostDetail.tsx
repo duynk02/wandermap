@@ -26,7 +26,8 @@ export function PostDetail({ post }: { post: Post }) {
     <div className="min-h-screen bg-surface">
       <div className="mx-auto max-w-2xl px-4 py-6">
         <Link
-          href={location ? ROUTES.location(location.id) : ROUTES.explore}
+          href={ROUTES.feed}
+          // href={location ? ROUTES.location(location.id) : ROUTES.feed}
           className="mb-6 flex items-center gap-2 text-sm text-ink-muted transition-colors hover:text-ink"
         >
           <ArrowLeft className="h-4 w-4" />
