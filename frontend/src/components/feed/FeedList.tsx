@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
@@ -9,8 +10,14 @@ import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { QUERY_KEYS, ROUTES } from "@/constants";
 import type { Post } from "@/types";
 import { FeedPostCard } from "./FeedPostCard";
+import { ImageLightbox } from "@/components/ui/ImageLightbox";
 
 export function FeedList() {
+  const [lightbox, setLightbox] = useState<{
+    images: string[];
+    initialIndex: number;
+    trigger: HTMLButtonElement;
+  } | null>(null);
   const queryClient = useQueryClient();
   const { user, isLoading: authLoading } = useAuth();
   const viewer = user?.id ?? "guest";
@@ -69,7 +76,13 @@ export function FeedList() {
     <>
       <div className="space-y-4">
         {posts.map((post) => (
-          <FeedPostCard key={post.id} post={post} />
+          <FeedPostCard
+            key={post.id}
+            post={post}
+            onImageClick={(initialIndex, trigger) => {
+              setLightbox({ images: [...post.images], initialIndex, trigger });
+            }}
+          />
         ))}
       </div>
 
@@ -83,6 +96,15 @@ export function FeedList() {
       )}
       {!hasNextPage && !isFetchingNextPage && (
         <p className="py-6 text-center text-xs text-ink-subtle">Bạn đã xem hết bản tin</p>
+      )}
+      {lightbox && (
+        <ImageLightbox
+          images={lightbox.images}
+          initialIndex={lightbox.initialIndex}
+          isOpen
+          onClose={() => setLightbox(null)}
+          returnFocusTo={lightbox.trigger}
+        />
       )}
     </>
   );

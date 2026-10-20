@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { ROUTES, APP_NAME } from "@/constants";
@@ -15,7 +16,15 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-ink-muted">Đăng nhập để bắt đầu khám phá</p>
         </div>
 
-        <LoginForm />
+        <Suspense
+          fallback={
+            <div role="status" className="flex min-h-[168px] items-center justify-center text-sm text-ink-muted">
+              Đang tải biểu mẫu đăng nhập…
+            </div>
+          }
+        >
+          <LoginForm />
+        </Suspense>
 
         <p className="mt-6 text-center text-sm text-ink-muted">
           Chưa có tài khoản?{" "}

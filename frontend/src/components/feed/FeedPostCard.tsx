@@ -14,12 +14,13 @@ import { cn, formatCount, getAvatarUrl, getPostImageUrl, timeAgo } from "@/lib/u
 import type { Post } from "@/types";
 
 const MAX_VISIBLE_IMAGES = 4;
+type ImageClickHandler = (index: number, trigger: HTMLButtonElement) => void;
 
 /**
  * Plain <img>: post images are arbitrary https URLs, which next/image would reject unless every
- * host is listed in `remotePatterns`. Each image links to the post detail page.
+ * host is listed in `remotePatterns`. The feed owns one shared lightbox for all cards.
  */
-function PostImages({ images, postId }: { images: string[]; postId: string }) {
+function PostImages({ images, onImageClick }: { images: string[]; onImageClick: ImageClickHandler }) {
     const shown = images.slice(0, MAX_VISIBLE_IMAGES);
     const extra = images.length - shown.length;
     if (shown.length === 0) return null;
@@ -27,12 +28,17 @@ function PostImages({ images, postId }: { images: string[]; postId: string }) {
     return (
         <div className={cn("grid gap-1", shown.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
             {shown.map((src, index) => (
-                <Link
+                <button
                     key={`${src}-${index}`}
-                    href={ROUTES.post(postId)}
-                    aria-label="Xem chi tiết bài đăng"
+                    type="button"
+                    aria-label={`Mở ảnh ${index + 1} trong ${images.length} ảnh`}
+                    aria-haspopup="dialog"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onImageClick(index, event.currentTarget);
+                    }}
                     className={cn(
-                        "relative block overflow-hidden bg-surface-muted",
+                        "relative block overflow-hidden bg-surface-muted focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500",
                         shown.length === 1 && "aspect-[4/3]",
                         shown.length === 2 && "aspect-square",
                         shown.length === 3 && (index === 0 ? "col-span-2 aspect-[16/9]" : "aspect-square"),
@@ -46,13 +52,13 @@ function PostImages({ images, postId }: { images: string[]; postId: string }) {
                             +{extra}
                         </span>
                     )}
-                </Link>
+                </button>
             ))}
         </div>
     );
 }
 
-export function FeedPostCard({ post }: { post: Post }) {
+export function FeedPostCard({ post, onImageClick }: { post: Post; onImageClick: ImageClickHandler }) {
     const queryClient = useQueryClient();
     const requireAuth = useRequireAuth();
 
@@ -154,7 +160,7 @@ export function FeedPostCard({ post }: { post: Post }) {
 
             {post.images?.length > 0 && (
                 <div className="mt-3">
-                    <PostImages images={post.images} postId={post.id} />
+                    <PostImages images={post.images} onImageClick={onImageClick} />
                 </div>
             )}
 
