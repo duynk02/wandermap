@@ -10,7 +10,7 @@ import { RegisterDto } from './dto/register.dto';
 
 export interface UserRow {
   id: string; email: string; is_active: boolean; username: string; display_name: string;
-  avatar_url: string | null; bio: string | null; country_count: number; total_posts: number;
+  avatar_url: string | null; bio: string | null; home_city: string | null; country_count: number; total_posts: number;
   followers_count: number; following_count: number; created_at: Date;
 }
 interface SessionRow { id: string; user_id: string; token_hash: string; expires_at: Date; revoked_at: Date | null; replaced_by_session_id: string | null; is_active: boolean; email: string; }
@@ -37,7 +37,7 @@ export class AuthService {
       const displayName = dto.display_name?.trim() || email.split('@')[0];
       const profileResult = await client.query<UserRow>(
         `INSERT INTO profiles (id, username, display_name) VALUES ($1, $2, $3)
-         RETURNING id, username, display_name, avatar_url, bio, country_count, total_posts, followers_count, following_count, created_at`,
+         RETURNING id, username, display_name, avatar_url, bio, home_city, country_count, total_posts, followers_count, following_count, created_at`,
         [user.id, username, displayName],
       );
       return { ...profileResult.rows[0], email: user.email };
@@ -49,7 +49,7 @@ export class AuthService {
 
   async login(dto: LoginDto, metadata: { userAgent?: string; ip?: string }) {
     const result = await this.db.query<UserRow & { password_hash: string | null }>(
-      `SELECT u.id, u.email, u.password_hash, u.is_active, p.username, p.display_name, p.avatar_url, p.bio,
+      `SELECT u.id, u.email, u.password_hash, u.is_active, p.username, p.display_name, p.avatar_url, p.bio, p.home_city,
               p.country_count, p.total_posts, p.followers_count, p.following_count, p.created_at
        FROM users u JOIN profiles p ON p.id = u.id WHERE lower(u.email) = lower($1) LIMIT 1`, [dto.email.trim()],
     );
@@ -112,7 +112,7 @@ export class AuthService {
 
   async me(userId: string) {
     const result = await this.db.query<UserRow & { email: string }>(
-      `SELECT p.id, u.email, p.username, p.display_name, p.avatar_url, p.bio, p.country_count, p.total_posts,
+      `SELECT p.id, u.email, p.username, p.display_name, p.avatar_url, p.bio, p.home_city, p.country_count, p.total_posts,
               p.followers_count, p.following_count, p.created_at
        FROM profiles p JOIN users u ON u.id = p.id WHERE p.id = $1 AND u.is_active = true`, [userId],
     );

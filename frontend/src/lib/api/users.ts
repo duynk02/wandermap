@@ -1,5 +1,15 @@
 import type { Profile, UserPin } from "@/types";
 import { apiFetch, nullOn404 } from "./client";
+import type { UpdateProfileInput } from "@/lib/validations";
+
+export type UpdateProfileRequest = Partial<Omit<UpdateProfileInput, "bio" | "home_city">> & {
+  avatar_url?: string | null;
+  bio?: string | null;
+  home_city?: string | null;
+};
+
+export const updateMyProfile = (input: UpdateProfileRequest) =>
+  apiFetch<Profile>("/users/me", { method: "PATCH", body: input });
 
 export const getProfileByUsername = (username: string) =>
   nullOn404(apiFetch<Profile>(`/users/${encodeURIComponent(username)}`));

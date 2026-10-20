@@ -35,14 +35,15 @@ export const createPostSchema = z.object({
 
 // ── Profile ──────────────────────────────────────────────────────────────────
 export const updateProfileSchema = z.object({
-  display_name: z.string().min(2).max(50).optional(),
-  bio: z.string().max(200).optional(),
+  display_name: z.string().trim().min(1, "Vui lòng nhập tên hiển thị").max(80, "Tên hiển thị tối đa 80 ký tự"),
+  bio: z.string().trim().max(500, "Giới thiệu tối đa 500 ký tự"),
   username: z
     .string()
-    .min(3)
-    .max(30)
-    .regex(/^[a-z0-9_]+$/)
-    .optional(),
+    .trim()
+    .min(3, "Tên người dùng tối thiểu 3 ký tự")
+    .max(30, "Tên người dùng tối đa 30 ký tự")
+    .regex(/^[a-zA-Z0-9_]+$/, "Chỉ dùng chữ cái không dấu, số và dấu _"),
+  home_city: z.string().trim().max(120, "Thành phố tối đa 120 ký tự"),
 });
 
 // ── Itinerary ────────────────────────────────────────────────────────────────

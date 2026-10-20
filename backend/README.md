@@ -140,6 +140,28 @@ Like/save là các thao tác idempotent, không phải toggle dựa vào trạng
 - `GET /users/:username/following`
 - `GET /users/me/pins`, `PUT/DELETE /users/me/pins/:locationId`
 
+#### Chỉnh sửa hồ sơ
+
+`PATCH /api/v1/users/me` yêu cầu Bearer token và chỉ cập nhật hồ sơ của user hiện tại.
+Các trường cho phép: `username` (3–30 ký tự chữ cái không dấu, số, `_`),
+`display_name` (1–80 ký tự sau khi trim), `bio` (tối đa 500),
+`avatar_url` (URL HTTP/HTTPS hoặc `null`) và `home_city` (tối đa 120).
+Các trường khác bị ValidationPipe từ chối.
+Username duy nhất không phân biệt hoa/thường; trùng trả HTTP 409 với code `USERNAME_TAKEN`.
+`bio`, `home_city` có thể gửi chuỗi trống hoặc `null` để xóa giá trị.
+Response trả profile đã cập nhật, không chứa email hoặc token.
+
+Chạy `npm run db:migrate` từ `backend/` trước khi khởi động phiên bản này để áp dụng
+`006_profile_editing.sql` (thêm hai cột nullable `home_city`, `website`, giữ dữ liệu cũ).
+Trường website đã được loại khỏi giao diện và hợp đồng API. Cột `website` trong
+migration đã áp dụng được giữ nguyên để bảo toàn dữ liệu và checksum; ứng dụng không sử dụng cột này.
+Không cần biến môi trường mới. Avatar dùng lại `POST /api/v1/uploads/images`;
+ảnh được chuyển WebP tối đa 2048 px và loại metadata. Không triển khai ảnh bìa.
+Frontend cho phép kéo ảnh, thu phóng và xác nhận vùng cắt avatar theo tỷ lệ 1:1
+trước khi áp dụng vào form. Ảnh đã cắt có cạnh tối đa 512 px, không phóng lớn ảnh nguồn nhỏ,
+và chỉ được upload khi lưu hồ sơ. Hủy thao tác cắt giữ nguyên avatar trước đó.
+Đổi username làm đổi URL hồ sơ; URL username cũ không có alias tự động.
+
 ### Itineraries
 
 - `GET /itineraries` — danh sách public; `?mine=true` yêu cầu auth.

@@ -53,10 +53,12 @@ export const QUERY_KEYS = {
     byId: (id: string) => ["posts", id] as const,
   },
   notifications: {
+    all: ["notifications"] as const,
     list: (viewer: string) => ["notifications", "list", viewer] as const,
     unreadCount: (viewer: string) => ["notifications", "unread-count", viewer] as const,
   },
   comments: {
+    all: ["comments"] as const,
     /** Authoritative counters returned when a comment/reply is created. */
     byPost: (postId: string, viewer: string) => ["comments", "post", postId, viewer] as const,
     replies: (commentId: string, viewer: string) => ["comments", "replies", commentId, viewer] as const,
