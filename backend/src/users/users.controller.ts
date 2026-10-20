@@ -19,7 +19,7 @@ export class UsersController {
   me(@CurrentUser() user: AuthenticatedUser) { return this.users.getById(user.sub); }
 
   @Patch('me') @UseGuards(AccessTokenGuard) @ApiBearerAuth()
-  @ApiOperation({ summary: 'Update display name, avatar, or bio' })
+  @ApiOperation({ summary: 'Update the authenticated user profile' })
   updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto) { return this.users.updateMe(user.sub, dto); }
 
   @Get('me/pins') @UseGuards(AccessTokenGuard) @ApiBearerAuth()

@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ArrowLeft, Settings, Link2, LogOut, Check } from "lucide-react";
 import { signOut, useAuth } from "@/hooks/useAuth";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ApiError, followUser, unfollowUser } from "@/lib/api";
+import { QUERY_KEYS } from "@/constants";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useFollowStore } from "@/stores/followStore";
+import { useAuthStore } from "@/stores/authStore";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import type { Profile } from "@/types";
 
 const buttonClass =
   "flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white " +
@@ -28,6 +37,45 @@ export function BackButton() {
     <button type="button" onClick={goBack} className={buttonClass} aria-label="Quay lại">
       <ArrowLeft className="h-5 w-5" />
     </button>
+  );
+}
+
+export function ProfileFollowButton({ profile, loading }: { profile: Profile; loading: boolean }) {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const requireAuth = useRequireAuth();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const key = user ? `${user.id}:${profile.id}` : null;
+  const override = useFollowStore((state) => key ? state.overrides[key] : undefined);
+  const followed = !!user && (override ?? profile.is_following ?? false);
+  const mutation = useMutation({
+    mutationFn: (next: boolean) => next ? followUser(profile.username) : unfollowUser(profile.username),
+    onSuccess: (result, next) => {
+      if (key && useAuthStore.getState().user?.id === user?.id) {
+        useFollowStore.getState().setFollowing(key, next);
+      }
+      setConfirmOpen(false);
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.profiles.byUsername(profile.username) });
+      router.refresh();
+      if (result.changed) toast.success(next ? `Đã theo dõi ${profile.display_name}` : `Đã hủy theo dõi ${profile.display_name}`);
+    },
+    onError: (error) => toast.error(error instanceof ApiError ? error.message : "Không thể cập nhật theo dõi lúc này"),
+  });
+
+  if (isLoading || user?.id === profile.id) return null;
+
+  return (
+    <>
+      <button type="button" disabled={loading || mutation.isPending} onClick={() => {
+        if (!requireAuth("Đăng nhập để theo dõi")) return;
+        if (followed) setConfirmOpen(true);
+        else mutation.mutate(true);
+      }} className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-60">
+        {loading || mutation.isPending ? "Đang xử lý…" : followed ? "Đang theo dõi" : "Theo dõi"}
+      </button>
+      <ConfirmDialog open={confirmOpen} title={`Hủy theo dõi ${profile.display_name}?`} confirmLabel="Hủy theo dõi" cancelLabel="Quay lại" pending={mutation.isPending} onConfirm={() => mutation.mutate(false)} onCancel={() => setConfirmOpen(false)} />
+    </>
   );
 }
 

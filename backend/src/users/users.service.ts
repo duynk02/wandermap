@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -8,7 +8,7 @@ export class UsersService {
 
   async getById(userId: string) {
     const result = await this.db.query(
-      `SELECT p.id, u.email, p.username, p.display_name, p.avatar_url, p.bio, p.country_count, p.total_posts,
+      `SELECT p.id, u.email, p.username, p.display_name, p.avatar_url, p.bio, p.home_city, p.country_count, p.total_posts,
               p.followers_count, p.following_count, p.created_at
        FROM profiles p JOIN users u ON u.id = p.id WHERE p.id = $1 AND u.is_active = true`, [userId],
     );
@@ -18,7 +18,7 @@ export class UsersService {
 
   async getByUsername(username: string, viewerId?: string) {
     const result = await this.db.query(
-      `SELECT p.id, p.username, p.display_name, p.avatar_url, p.bio, p.country_count, p.total_posts,
+      `SELECT p.id, p.username, p.display_name, p.avatar_url, p.bio, p.home_city, p.country_count, p.total_posts,
               p.followers_count, p.following_count, p.created_at,
               ($2::uuid IS NOT NULL AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $2 AND f.following_id = p.id)) AS is_following
        FROM profiles p JOIN users u ON u.id = p.id AND u.is_active = true WHERE lower(p.username) = lower($1)`, [username, viewerId ?? null],
@@ -30,14 +30,23 @@ export class UsersService {
   async updateMe(userId: string, dto: UpdateProfileDto) {
     const fields: string[] = [];
     const values: unknown[] = [userId];
+    if (dto.username !== undefined) { values.push(dto.username.trim()); fields.push(`username = $${values.length}`); }
     if (dto.display_name !== undefined) { values.push(dto.display_name.trim()); fields.push(`display_name = $${values.length}`); }
     if (dto.bio !== undefined) { values.push(dto.bio?.trim() || null); fields.push(`bio = $${values.length}`); }
     if (dto.avatar_url !== undefined) { values.push(dto.avatar_url || null); fields.push(`avatar_url = $${values.length}`); }
+    if (dto.home_city !== undefined) { values.push(dto.home_city?.trim() || null); fields.push(`home_city = $${values.length}`); }
     if (fields.length === 0) throw new BadRequestException('Provide at least one profile field to update.');
     const result = await this.db.query(
       `UPDATE profiles SET ${fields.join(', ')} WHERE id = $1
-       RETURNING id, username, display_name, avatar_url, bio, country_count, total_posts, followers_count, following_count, created_at`, values,
-    );
+       RETURNING id, username, display_name, avatar_url, bio, home_city, country_count, total_posts, followers_count, following_count, created_at`, values,
+    ).catch((error: unknown) => {
+      const dbError = error as { code?: string; constraint?: string };
+      // The existing unique index also handles concurrent requests for the same username.
+      if (dbError?.code === '23505' && dbError.constraint === 'profiles_username_lower_unique') {
+        throw new ConflictException({ code: 'USERNAME_TAKEN', message: 'Tên người dùng đã được sử dụng.' });
+      }
+      throw error;
+    });
     if (!result.rows[0]) throw new NotFoundException('Profile not found.');
     return result.rows[0];
   }

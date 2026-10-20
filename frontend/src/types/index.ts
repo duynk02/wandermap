@@ -25,6 +25,7 @@ export interface Profile {
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
+  home_city: string | null;
   country_count: number;
   total_posts: number;
   followers_count: number;
