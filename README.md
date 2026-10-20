@@ -58,10 +58,6 @@ src/
 ├── types/                  # Domain types + database.types.ts
 ├── constants/              # ROUTES, QUERY_KEYS, categories...
 └── styles/                 # globals.css (CSS variables + Tailwind)
-
-supabase/
-└── migrations/
-    └── 001_initial_schema.sql   # Full schema: tables, RLS, triggers, functions
 ```
 
 ---

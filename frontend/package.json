@@ -7,14 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit",
-    "api:dev": "npm --prefix backend run dev",
-    "api:build": "npm --prefix backend run build",
-    "api:type-check": "npm --prefix backend run type-check",
-    "api:test": "npm --prefix backend test",
-    "api:lint": "npm --prefix backend run lint",
-    "api:db:migrate": "npm --prefix backend run db:migrate",
-    "api:db:migrate:status": "npm --prefix backend run db:migrate:status"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "next": "^15.2.4",

@@ -57,7 +57,5 @@
   ],
   "exclude": [
     "node_modules",
-    "backend",
-    "supabase"
   ]
 }
