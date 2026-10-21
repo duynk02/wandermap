@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 import Map, {
   Layer,
   NavigationControl,
@@ -43,6 +44,13 @@ export function TravelMap({
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
 }) {
+  const { resolvedTheme } = useTheme();
+  // Journey appearance belongs to the saved design; personal maps follow the UI.
+  const mapStyle = journey
+    ? style.map_style
+    : resolvedTheme === "dark"
+      ? "dark-v11"
+      : "outdoors-v12";
   const map = useRef<MapRef>(null);
   const container = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
@@ -128,7 +136,7 @@ export function TravelMap({
           key={attempt}
           ref={attachMap}
           mapboxAccessToken={token}
-          mapStyle={`mapbox://styles/mapbox/${style.map_style}`}
+          mapStyle={`mapbox://styles/mapbox/${mapStyle}`}
           initialViewState={DEFAULT_VIEWPORT}
           minZoom={1}
           maxZoom={18}

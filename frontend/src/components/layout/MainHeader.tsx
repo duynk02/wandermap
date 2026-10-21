@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Compass, Home, PlusSquare } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { NotificationBell } from "@/components/notification/NotificationBell";
+import { ThemeSelector } from "@/components/layout/ThemeSelector";
 import { ROUTES } from "@/constants";
 import { cn, getAvatarUrl } from "@/lib/utils";
 
@@ -43,6 +44,8 @@ export function MainHeader() {
               <span className="hidden sm:inline">{label}</span>
             </Link>
           ))}
+
+          <ThemeSelector />
 
           {isAuthenticated ? (
             <>

@@ -14,6 +14,7 @@ import {
   SettingsMenu,
 } from "./ProfileHeaderActions";
 import { EditProfileDialog } from "./EditProfileDialog";
+import { ThemeSelector } from "@/components/layout/ThemeSelector";
 
 interface ProfileHeaderProps {
   profile: Profile;
@@ -52,7 +53,10 @@ export function ProfileHeader({ profile }: ProfileHeaderProps) {
       <div className="mx-auto max-w-5xl">
         <div className="flex items-center justify-between pt-4">
           <BackButton />
-          <SettingsMenu profileId={profile.id} />
+          <div className="flex items-center gap-2">
+            <ThemeSelector className="bg-white/10 text-white backdrop-blur hover:bg-white/20 hover:text-white focus-visible:ring-white/60 data-[state=open]:bg-white/20" />
+            <SettingsMenu profileId={profile.id} />
+          </div>
         </div>
         <div className="mt-6 flex flex-wrap items-end justify-between gap-5">
           <div className="flex min-w-0 items-end gap-4">
