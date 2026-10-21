@@ -80,8 +80,9 @@ export function VietnamOverlay() {
       setBeforeId(firstSymbolLayerId(map) ?? "");
       hideBaseLabels(map, HIDDEN_BASE_LABELS);
     };
+    // Reapply label filters and layer placement when the UI switches map styles.
+    map.on("style.load", setup);
     if (map.isStyleLoaded()) setup();
-    else map.once("style.load", setup);
 
     return () => {
       map.off("style.load", setup);

@@ -6,8 +6,9 @@ import { ClusterLayer } from "./ClusterLayer";
 import { TrendingPins } from "./TrendingPins";
 import { VietnamOverlay } from "./VietnamOverlay";
 import { SearchPin } from "./SearchPin";
-import { MAPBOX_STYLE } from "@/lib/mapbox";
+import { MAPBOX_STYLE, MAPBOX_STYLE_DARK } from "@/lib/mapbox";
 import { useEffect } from "react";
+import { useTheme } from "next-themes";
 import { useMapStore } from "@/stores/mapStore";
 import type { Location } from "@/types";
 
@@ -16,6 +17,7 @@ interface MapCanvasProps {
 }
 
 export function MapCanvas({ initialLocations }: MapCanvasProps) {
+  const { resolvedTheme } = useTheme();
   const { mapRef, viewport, clusters, isInitialLoad, expandCluster, onMoveEnd } = useMap();
 
   const flyToTarget = useMapStore((s) => s.flyToTarget);
@@ -40,7 +42,7 @@ export function MapCanvas({ initialLocations }: MapCanvasProps) {
     <Map
       ref={mapRef}
       mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
-      mapStyle={MAPBOX_STYLE}
+      mapStyle={resolvedTheme === "dark" ? MAPBOX_STYLE_DARK : MAPBOX_STYLE}
       initialViewState={viewport}
       onMoveEnd={onMoveEnd}
       style={{ width: "100%", height: "100%" }}

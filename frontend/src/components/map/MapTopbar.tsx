@@ -12,6 +12,7 @@ import { useMapStore } from "@/stores/mapStore";
 import { LOCATION_CATEGORIES, ROUTES } from "@/constants";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification/NotificationBell";
+import { ThemeSelector } from "@/components/layout/ThemeSelector";
 
 type SearchScope = "vn" | "world";
 /** Zoom used when a search result is chosen (neighbourhood/POI level). */
@@ -110,9 +111,9 @@ export function MapTopbar() {
   };
 
   return (
-    <div className="flex items-start gap-3 p-4">
+    <div className="flex flex-col gap-3 p-4 md:flex-row md:items-start">
       {/* Search bar */}
-      <div className="relative w-full max-w-lg flex-1">
+      <div className="relative w-full min-w-0 md:max-w-lg md:flex-1">
         <div
           className={cn(
             "flex items-center gap-2 rounded-2xl bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm",
@@ -135,7 +136,7 @@ export function MapTopbar() {
             placeholder="Tìm địa điểm, thành phố..."
             aria-label="Tìm kiếm địa điểm"
             aria-expanded={isOpen && input.trim().length >= 2}
-            className="flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
+            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
           />
 
           {isSearching && (
@@ -313,7 +314,8 @@ export function MapTopbar() {
       </div>
 
       {/* Actions */}
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex w-full shrink-0 items-center justify-end gap-2 md:w-auto">
+        <ThemeSelector className="rounded-2xl bg-white/95 text-ink shadow-lg backdrop-blur-sm hover:bg-surface-muted dark:bg-surface-elevated/95" />
         <Link
           href={ROUTES.feed}
           aria-label="Bản tin cộng đồng"
@@ -348,7 +350,7 @@ export function MapTopbar() {
         ) : (
           <Link
             href={ROUTES.login}
-            className="flex items-center gap-2 rounded-2xl bg-white/95 px-4 py-3 text-sm font-semibold text-ink shadow-lg backdrop-blur-sm transition-colors hover:bg-white"
+            className="flex items-center gap-2 rounded-2xl bg-white/95 px-4 py-3 text-sm font-semibold text-ink shadow-lg backdrop-blur-sm transition-colors hover:bg-surface-muted dark:bg-surface-elevated/95"
           >
             <User className="h-4 w-4" />
             Đăng nhập

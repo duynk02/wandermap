@@ -104,6 +104,14 @@ Browser suite cần Node 22+, Chrome và Mapbox token hợp lệ. Có thể đ�
 
 Smoke hiệu năng local: 1.001 điểm cá nhân khoảng 259 KB, HTTP khoảng 45 ms trong lượt đo; danh sách 20 dòng. Đây là mẫu thử trên database tạm, chưa phải benchmark production hay xác nhận tải đồng thời lớn. Map dùng native clustering/layers, không tạo DOM marker cho từng địa điểm.
 
+## Chọn giao diện sáng/tối
+
+Nút **Giao diện** (biểu tượng mặt trời/mặt trăng trên mobile) nằm ở thanh trên của Bản tin, Khám phá và Hồ sơ, dùng được cả khi chưa đăng nhập. Chọn **Sáng**, **Tối** hoặc **Theo hệ thống**; lựa chọn được `next-themes` lưu trên trình duyệt, giữ khi chuyển trang/tải lại. Mặc định theo hệ thống. Menu hỗ trợ bàn phím, Escape trả focus và vùng bấm tối thiểu 44px.
+
+Nền bản đồ Khám phá và bản đồ cá nhân theo giao diện. Journey dùng kiểu bản đồ đã lưu trong `style_config`, giữ nguyên thiết kế khi người xem đổi giao diện. Thanh tìm kiếm và các nút ở Khám phá xuống hai hàng trên màn hình nhỏ.
+
+Kiểm tra thủ công: chọn Tối tại Bản tin, tải lại/chuyển sang Hồ sơ; chọn Theo hệ thống rồi đổi chế độ OS; mở menu bằng bàn phím và thử ở chiều rộng 320px. Đổi giao diện trên bản đồ cần giữ vị trí/zoom và các điểm.
+
 ## Triển khai
 
 Database cần migrations 001–008 đã có; không có migration mới trong bước này. Kiểm tra `npm run db:migrate:status`, áp dụng các migration còn thiếu theo hướng dẫn Step 2, giữ nguyên checksum/dữ liệu. Restart/redeploy backend và frontend cùng nhau. Không đổi secret, cookie, .env hoặc reset database.
