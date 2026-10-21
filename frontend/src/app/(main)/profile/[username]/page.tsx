@@ -5,10 +5,12 @@ import { ProfileTravelMap } from "@/components/profile/ProfileTravelMap";
 import { ProfileStats } from "@/components/profile/ProfileStats";
 import { PostGrid } from "@/components/post/PostGrid";
 import { getPostsByAuthor, getProfileByUsername } from "@/lib/api";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
+import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
+import { ProfileTabs } from "@/components/profile/ProfileTabs";
 
 interface Props {
   params: Promise<{ username: string }>;
+  searchParams: Promise<{ tab?: string | string[] }>;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -22,8 +24,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function ProfilePage({ params }: Props) {
+export default async function ProfilePage({ params, searchParams }: Props) {
   const { username } = await params;
+  const { tab } = await searchParams;
+  const initialTab = tab === "map" || tab === "saved" ? tab : "posts";
   const profile = await getProfileByUsername(username);
 
   if (!profile) notFound();
@@ -38,10 +42,10 @@ export default async function ProfilePage({ params }: Props) {
         {/* Travel stats bar */}
         <ProfileStats profile={profile} />
 
-        <Tabs defaultValue="posts" className="mt-8">
+        <ProfileTabs initialTab={initialTab}>
           <TabsList>
             <TabsTrigger value="posts">Bài đăng</TabsTrigger>
-            <TabsTrigger value="map">Bản đồ của tôi</TabsTrigger>
+            <TabsTrigger value="map">Bản đồ</TabsTrigger>
             <TabsTrigger value="saved">Đã lưu</TabsTrigger>
           </TabsList>
 
@@ -50,14 +54,13 @@ export default async function ProfilePage({ params }: Props) {
           </TabsContent>
 
           <TabsContent value="map" className="mt-6">
-            {/* Personal travel map — visited vs wishlist */}
-            <ProfileTravelMap userId={profile.id} />
+            <ProfileTravelMap userId={profile.id} username={profile.username} />
           </TabsContent>
 
           <TabsContent value="saved" className="mt-6">
             {/* Saved posts — fetched client-side */}
           </TabsContent>
-        </Tabs>
+        </ProfileTabs>
       </div>
     </div>
   );

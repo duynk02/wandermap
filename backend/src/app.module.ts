@@ -14,6 +14,7 @@ import { PlacesModule } from './places/places.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { CommentsModule } from './comments/comments.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { JourneysModule } from './journeys/journeys.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     UploadsModule,
     CommentsModule,
     NotificationsModule,
+    JourneysModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

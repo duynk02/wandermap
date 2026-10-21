@@ -27,7 +27,7 @@ WanderMap phát triển quanh ba trải nghiệm:
 
 **Kiến trúc hiện tại:** `frontend/` (Next.js) giao tiếp với `backend/` (NestJS REST API); backend sử dụng PostgreSQL + PostGIS.
 
-**Hướng phát triển tiếp theo:** chỉnh sửa profile đầy đủ, Image Lightbox trên Feed, tạo bản đồ hành trình (*Journey Flex*), thông báo thời gian thực qua WebSocket và nhắn tin.
+**Hướng phát triển tiếp theo:** hoàn thiện trải nghiệm Feed, xuất ảnh và chia sẻ Journey lên Feed, thông báo thời gian thực qua WebSocket và nhắn tin. My Travel Map/Journey Builder đã có bản MVP; xem hướng dẫn Phase 2 bên dưới.
 
 ## Công nghệ sử dụng
 
@@ -228,7 +228,7 @@ Mở **http://localhost:3000**. Nếu thay `API_INTERNAL_URL`, restart hoặc re
 | Bài đăng | Tạo/xem/sửa/xóa bài, ảnh, rating, gắn location, feed công khai/following | Image Lightbox chưa thấy trong ZIP |
 | Tương tác xã hội | Follow/unfollow, like/unlike, save/unsave, bình luận và replies | Tiếp tục hoàn thiện UX và các edge cases |
 | Profile | Trang hồ sơ, chỉ số, bản đồ cá nhân; `PATCH /users/me` hỗ trợ tên, avatar URL và bio | Form chỉnh sửa đầy đủ, cover, username, website còn là kế hoạch |
-| Travel pins | Danh sách pins `visited` / `wishlist`; thêm/xóa pin qua API | Journey Flex và Travel Passport chưa có |
+| Travel map & Journey | Visited/wishlist, lịch sử ghé thăm; bản đồ Profile/bộ lọc/thống kê; Journey Builder nháp/công khai | Xuất ảnh, Journey Post và Travel Passport chưa có |
 | Itineraries | Backend có API itinerary và itinerary stops | Không đồng nghĩa đã có trình dựng hành trình drag-and-drop trên frontend |
 | Notifications | Backend API danh sách/chưa đọc/đánh dấu tất cả; frontend có chuông và danh sách | Frontend hiện polling unread mỗi 30 giây, **chưa phải Socket.IO realtime** |
 | Upload ảnh | API `POST /uploads/images` và xử lý ảnh WebP | Lưu local disk; cần kế hoạch storage bền vững khi deploy nhiều instance |
@@ -283,6 +283,11 @@ Migrations chính nằm tại `backend/src/database/migrations/`:
 008_visited_locations_cutover.sql
 ```
 
+Phase 2 Step 3 đã mở rộng tab bản đồ Profile với danh sách, bộ lọc, thống kê và
+Journey Builder: chọn/sắp xếp điểm, preview Mapbox, lưu nháp/công khai, sửa/xóa theo quyền.
+Xem [hướng dẫn My Travel Map & Journey](docs/phase-2-step-3.md). Xuất ảnh và Journey Post/Feed
+vẫn thuộc các bước tiếp theo.
+
 Phase 2 Step 1 bổ sung schema đã đến/Journey. Step 2 thêm API và giao diện đánh dấu
 ở trang/panel địa điểm, quản lý ngày ghé thăm và quyền riêng tư. Migration 008 chuyển
 pins visited cũ thành đánh dấu private, không gán ngày giả; cần deploy cùng backend
@@ -313,8 +318,8 @@ Roadmap là **kế hoạch**, không phải các tính năng được xác nhậ
 
 ### Phase 2 — Travel Footprint & Journey Flex
 
-- [ ] **My Travel Footprint:** xem những địa điểm đã ghé thăm và lọc theo thời gian/khu vực; tận dụng pins hiện tại sau khi xác định rõ semantics.
-- [ ] **Journey Flex:** chọn và sắp xếp các điểm đã đến, nối điểm trên Mapbox và tạo bản đồ thành tích để chia sẻ.
+- [x] **My Travel Footprint:** bản đồ, danh sách, thống kê và bộ lọc năm/quốc gia/tìm kiếm, có phân quyền trên Profile.
+- [x] **Journey Flex MVP:** chọn/sắp xếp điểm đã đến, nối trên Mapbox, tùy chỉnh, preview và lưu nháp/công khai. Export và bài Feed được theo dõi riêng bên dưới.
 - [ ] **Journey Post:** chia sẻ bản đồ hành trình như một loại nội dung trên Feed.
 - [ ] Xuất ảnh hành trình; animated recap/video để giai đoạn mở rộng.
 

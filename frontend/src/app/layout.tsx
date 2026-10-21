@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { QueryProvider } from "@/components/layout/QueryProvider";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
 import { AuthProvider } from "@/components/layout/AuthProvider";
+import { NavigationHistory } from "@/components/layout/NavigationHistory";
 import { APP_NAME, APP_DESCRIPTION } from "@/constants";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "@/styles/globals.css";
@@ -37,10 +38,15 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi" suppressHydrationWarning>
-      <body className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}>
+      {/* Extensions may inject cursor attributes before hydration; this applies only to body. */}
+      <body
+        suppressHydrationWarning
+        className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}
+      >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <QueryProvider>
             <AuthProvider>
+              <NavigationHistory />
               {children}
               <Toaster position="top-right" richColors closeButton />
             </AuthProvider>

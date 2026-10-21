@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────
 
 // ── Enums ──────────────────────────────────────────────────────────────────
+export type * from "./journey";
 export type LocationCategory =
   | "camping"
   | "cafe"

@@ -11,6 +11,7 @@ import { ApiExceptionFilter } from '../src/common/filters/api-exception.filter';
 import { DatabaseModule } from '../src/database/database.module';
 import { DatabaseService } from '../src/database/database.service';
 import { UsersModule } from '../src/users/users.module';
+import { JourneysModule } from '../src/journeys/journeys.module';
 
 const databaseUrl = process.env.WANDERMAP_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -55,12 +56,14 @@ describeDatabase('Visited locations HTTP API with real PostgreSQL/PostGIS', () =
 
     const module = await Test.createTestingModule({ imports: [
       ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, load: [() => ({ JWT_ACCESS_SECRET: secret })] }),
-      DatabaseModule, UsersModule,
+      DatabaseModule, UsersModule, JourneysModule,
     ] }).overrideProvider(DatabaseService).useValue({
       query: (sql: string, values: unknown[]) => db.query(sql, values),
       // Real SQL, isolated by nested transaction savepoints inside this test schema.
       transaction: async <T>(work: (client: PoolClient) => Promise<T>) => {
         await db.query('SAVEPOINT api_mutation');
+        // Match a fresh real transaction: aggregate constraints begin deferred.
+        await db.query('SET CONSTRAINTS ALL DEFERRED');
         try {
           const result = await work(db as unknown as PoolClient);
           await db.query('SET CONSTRAINTS ALL IMMEDIATE');
@@ -224,5 +227,145 @@ describeDatabase('Visited locations HTTP API with real PostgreSQL/PostGIS', () =
     await request(app.getHttpServer()).get('/api/v1/users/me').set('Authorization', token()).expect(200).expect(({ body }) => expect(body).toMatchObject({ visited_location_count: 2, country_count: 2, total_posts: 1 }));
     await request(app.getHttpServer()).get('/api/v1/users/api_owner').expect(200).expect(({ body }) => expect(body).toMatchObject({ visited_location_count: 1, country_count: 1, total_posts: 1 }));
     await request(app.getHttpServer()).get('/api/v1/users/api_owner').set('Authorization', token(other)).expect(200).expect(({ body }) => expect(body.visited_location_count).toBe(1));
+  });
+
+  const journeyBase = '/api/v1/journeys';
+  const createJourney = (values: object = {}, actor = owner) => request(app.getHttpServer()).post(journeyBase).set('Authorization', token(actor)).send({ request_id: randomUUID(), title: 'Ký ức qua những miền đất', stops: [{ location_id: locations[0] }], ...values });
+  const patchJourney = (id: string, values: object, actor = owner) => request(app.getHttpServer()).patch(`${journeyBase}/${id}`).set('Authorization', token(actor)).send(values);
+
+  it('keeps filtered map, list, visit counts and options consistent without revealing private metadata', async () => {
+    await db.query('UPDATE locations SET name = $2, city = $3 WHERE id = $1', [locations[1], 'Đà Lạt', 'Lâm Đồng']);
+    await addVisit(migratedMark, '2024-01-01').expect(201);
+    await mark(locations[1], { visibility: 'public', visited_at: '2025-12-31' }).expect(201);
+    const publicMark = (await request(app.getHttpServer()).get(base).set('Authorization', token()).query({ location_id: locations[1] })).body.data[0];
+    await addVisit(publicMark.id, '2026-01-01').expect(201);
+    await addVisit(publicMark.id, '2026-12-31').expect(201);
+    await mark(locations[2]).expect(201); // Undated mark is excluded from a selected year.
+    const mapPath = '/api/v1/users/api_owner/travel-map';
+    const visible = await request(app.getHttpServer()).get(mapPath).query({ year: 2026, search: 'da lat', country: 'Nhật Bản' }).expect(200);
+    expect(visible.body).toMatchObject({ statistics: { location_count: 1, visit_count: 2, journey_count: 0 }, options: { years: [2026, 2025], countries: ['Nhật Bản'] }, points: [{ location_id: locations[1], name: 'Đà Lạt', visit_count: 2, last_visited_at: '2026-12-31', coordinates: { lng: 107, lat: 11 } }] });
+    expect(visible.body.points[0]).not.toHaveProperty('note');
+    expect(JSON.stringify(visible.body)).not.toContain(migratedMark);
+    const page = await request(app.getHttpServer()).get('/api/v1/users/api_owner/visited-locations').query({ year: 2026, search: 'da lat', country: 'Nhật Bản', pageSize: 1 }).expect(200);
+    expect(page.body).toMatchObject({ count: 1, data: [{ location_id: locations[1], visit_count: 2, last_visited_at: '2026-12-31' }] });
+    await request(app.getHttpServer()).get(mapPath).set('Authorization', token()).expect(200).expect(({ body }) => expect(body).toMatchObject({ statistics: { location_count: 3, visit_count: 4 }, options: { years: [2026, 2025, 2024] } }));
+    await request(app.getHttpServer()).get(mapPath).set('Authorization', token(other)).query({ year: 2024 }).expect(200).expect(({ body }) => expect(body.statistics.location_count).toBe(0));
+    await request(app.getHttpServer()).get(mapPath).query({ search: "%' OR true --" }).expect(200).expect(({ body }) => expect(body.points).toEqual([]));
+    for (const query of [{ year: 0 }, { year: 10000 }, { year: '2026.5' }, { search: 'x'.repeat(101) }, { user_id: owner }]) await request(app.getHttpServer()).get(mapPath).query(query).expect(400);
+    await request(app.getHttpServer()).get('/api/v1/users/api_inactive/travel-map').expect(404);
+  });
+
+  it('validates journey contracts, active authentication and stop ownership before creating data', async () => {
+    await request(app.getHttpServer()).post(journeyBase).send({}).expect(401);
+    await createJourney({}, inactive).expect(401);
+    for (const values of [
+      { request_id: undefined }, { title: undefined }, { title: '   ' }, { title: 'x'.repeat(201) }, { stops: undefined }, { stops: null },
+      { user_id: other }, { status: null }, { visibility: 'followers' }, { cover_image_url: 'javascript:alert(1)' }, { style_config: null },
+      { style_config: { line_style: 'curved' } }, { style_config: { map_style: 'untrusted' } }, { style_config: { show_labels: 'false' } },
+      { style_config: { extra: true } }, { stops: [{ location_id: locations[0] }, { location_id: locations[0] }] },
+      { stops: [{ location_id: locations[0], user_id: other }] }, { stops: Array.from({ length: 101 }, () => ({ location_id: randomUUID() })) },
+    ]) await createJourney(values).expect(400);
+    await createJourney({ stops: [{ location_id: locations[2] }] }).expect(400);
+    const foreignMark = await request(app.getHttpServer()).post(base).set('Authorization', token(other)).send({ location_id: locations[0], visited_at: '2026-01-01' }).expect(201);
+    const foreignVisit = (await request(app.getHttpServer()).get(`${base}/${foreignMark.body.id}/visits`).set('Authorization', token(other))).body.data[0];
+    await createJourney({ stops: [{ location_id: locations[0], visit_id: foreignVisit.id }] }).expect(400);
+    expect((await db.query('SELECT count(*)::integer AS count FROM journeys')).rows[0].count).toBe(0);
+  });
+
+  it('retries creation idempotently, keeps drafts private, and enforces at least two stops at publication', async () => {
+    const requestId = randomUUID();
+    const first = await createJourney({ request_id: requestId, visibility: 'public' }).expect(201);
+    expect(first.body).toMatchObject({ id: requestId, user_id: owner, revision: 1, status: 'draft', stops: [{ stop_order: 1, location_id: locations[0], visit_id: null }] });
+    const repeated = await createJourney({ request_id: requestId, visibility: 'public' }).expect(201);
+    expect(repeated.body.stops[0].id).toBe(first.body.stops[0].id);
+    await createJourney({ request_id: requestId, title: 'Changed' }).expect(409);
+    await createJourney({ request_id: requestId, stops: [] }, other).expect(404);
+    await request(app.getHttpServer()).get(`${journeyBase}/${requestId}`).expect(404);
+    await request(app.getHttpServer()).post(`${journeyBase}/${requestId}/publish`).set('Authorization', token()).send({ revision: 1 }).expect(400);
+    await createJourney({ status: 'published' }).expect(400);
+    await request(app.getHttpServer()).get(`${journeyBase}/${requestId}`).set('Authorization', token()).expect(200).expect(({ body }) => expect(body.revision).toBe(1));
+    await createJourney({ stops: [] }).expect(201);
+    expect((await db.query('SELECT count(*)::integer AS count FROM journeys')).rows[0].count).toBe(2);
+  });
+
+  it('rolls back metadata and stops together, reorders atomically, and rejects stale revisions', async () => {
+    await mark().expect(201);
+    const created = await createJourney({ stops: locations.slice(0, 2).map((location_id) => ({ location_id })) }).expect(201);
+    const id = created.body.id;
+    const oldIds = created.body.stops.map((stop: { id: string }) => stop.id);
+    await patchJourney(id, { revision: 1, title: 'Must roll back', stops: [{ location_id: locations[1] }, { location_id: locations[2] }] }).expect(400);
+    await request(app.getHttpServer()).get(`${journeyBase}/${id}`).set('Authorization', token()).expect(200).expect(({ body }) => expect(body).toMatchObject({ title: 'Ký ức qua những miền đất', revision: 1, stops: [{ id: oldIds[0] }, { id: oldIds[1] }] }));
+    const reordered = await patchJourney(id, { revision: 1, title: 'New title', stops: [{ location_id: locations[1] }, { location_id: locations[0] }], style_config: { line_style: 'dashed', line_color: '#e87926' } }).expect(200);
+    expect(reordered.body).toMatchObject({ title: 'New title', revision: 2, style_config: { version: 1, line_style: 'dashed', line_color: '#e87926' }, stops: [{ id: oldIds[1], stop_order: 1 }, { id: oldIds[0], stop_order: 2 }] });
+    await patchJourney(id, { revision: 1, title: 'Lost update' }).expect(409).expect(({ body }) => expect(body.code).toBe('JOURNEY_REVISION_CONFLICT'));
+    await patchJourney(id, { revision: 2 }).expect(400);
+    await patchJourney(id, { title: 'No revision' }).expect(400);
+    await request(app.getHttpServer()).delete(`${journeyBase}/${id}`).set('Authorization', token()).query({ revision: 1 }).expect(409);
+  });
+
+  it('publishes explicit snapshots while retaining private marks, and preserves history after visits change or disappear', async () => {
+    const visit = await addVisit(migratedMark, '2024-02-29', 'Never expose this private note').expect(201);
+    const second = await mark(locations[1], { visited_at: '2025-06-01' }).expect(201);
+    const created = await createJourney({ stops: [{ location_id: locations[0] }, { location_id: locations[1] }] }).expect(201);
+    const id = created.body.id;
+    expect(created.body.stops[0]).toMatchObject({ visit_id: visit.body.id, visited_at_snapshot: '2024-02-29' });
+    await request(app.getHttpServer()).post(`${journeyBase}/${id}/publish`).set('Authorization', token()).send({ revision: 1, visibility: 'public' }).expect(201);
+    const publicJourney = await request(app.getHttpServer()).get(`${journeyBase}/${id}`).expect(200);
+    expect(publicJourney.body.stops[0]).not.toHaveProperty('visit_id');
+    expect(JSON.stringify(publicJourney.body)).not.toContain('Never expose');
+    await request(app.getHttpServer()).get('/api/v1/users/api_owner/travel-map').expect(200).expect(({ body }) => expect(body).toMatchObject({ statistics: { location_count: 0, journey_count: 1 }, points: [] }));
+    await request(app.getHttpServer()).patch(`${base}/${migratedMark}/visits/${visit.body.id}`).set('Authorization', token()).send({ visited_at: '2026-01-01' }).expect(200);
+    await request(app.getHttpServer()).delete(`${base}/${migratedMark}`).set('Authorization', token()).expect(200);
+    await request(app.getHttpServer()).delete(`${base}/${second.body.id}`).set('Authorization', token()).expect(200);
+    await db.query('UPDATE locations SET name = $2 WHERE id = $1', [locations[0], 'Renamed location']);
+    const changed = await patchJourney(id, { revision: 2, description: 'Reordered after removal', stops: [{ location_id: locations[1] }, { location_id: locations[0] }] }).expect(200);
+    expect(changed.body.stops[1]).toMatchObject({ visit_id: null, location_name_snapshot: 'Điểm đến 0', visited_at_snapshot: '2024-02-29', stop_order: 2 });
+    await request(app.getHttpServer()).get(`${journeyBase}/${id}`).expect(200).expect(({ body }) => expect(body.stops[1].visited_at_snapshot).toBe('2024-02-29'));
+    await patchJourney(id, { revision: 3, stops: [{ location_id: locations[0] }] }).expect(400);
+    await patchJourney(id, { revision: 3, status: 'draft', stops: [] }).expect(200);
+    await request(app.getHttpServer()).get(`${journeyBase}/${id}`).expect(404);
+  });
+
+  it('guards all journey reads, writes, lists, pagination and deletion by ownership and visibility', async () => {
+    await mark().expect(201);
+    const privateJourney = await createJourney({ status: 'published', stops: locations.slice(0, 2).map((location_id) => ({ location_id })) }).expect(201);
+    const publicJourney = await createJourney({ status: 'published', visibility: 'public', stops: locations.slice(0, 2).map((location_id) => ({ location_id })) }).expect(201);
+    await createJourney({ visibility: 'public' }).expect(201);
+    for (const auth of [undefined, token(other)]) {
+      let get = request(app.getHttpServer()).get(`${journeyBase}/${privateJourney.body.id}`);
+      if (auth) get = get.set('Authorization', auth);
+      await get.expect(404);
+    }
+    await patchJourney(privateJourney.body.id, { revision: 1, title: 'Forbidden' }, other).expect(404);
+    await request(app.getHttpServer()).post(`${journeyBase}/${privateJourney.body.id}/publish`).set('Authorization', token(other)).send({ revision: 1 }).expect(404);
+    await request(app.getHttpServer()).delete(`${journeyBase}/${privateJourney.body.id}`).set('Authorization', token(other)).query({ revision: 1 }).expect(404);
+    await request(app.getHttpServer()).get(journeyBase).query({ username: 'api_owner', pageSize: 1 }).expect(200).expect(({ body }) => expect(body).toMatchObject({ count: 1, hasMore: false, data: [{ id: publicJourney.body.id }] }));
+    await request(app.getHttpServer()).get(journeyBase).set('Authorization', token()).query({ username: 'api_owner', pageSize: 2 }).expect(200).expect(({ body }) => expect(body).toMatchObject({ count: 3, hasMore: true }));
+    await request(app.getHttpServer()).get(journeyBase).set('Authorization', token()).query({ mine: true, page: 2, pageSize: 2 }).expect(200).expect(({ body }) => expect(body).toMatchObject({ count: 3, hasMore: false }));
+    await request(app.getHttpServer()).get(journeyBase).query({ mine: true }).expect(401);
+    for (const query of [{ page: 0 }, { pageSize: 51 }, { mine: 'no' }, { user_id: owner }]) await request(app.getHttpServer()).get(journeyBase).query(query).expect(400);
+    await request(app.getHttpServer()).delete(`${journeyBase}/${privateJourney.body.id}`).set('Authorization', token()).query({ revision: 1 }).expect(200);
+    expect((await db.query('SELECT count(*)::integer AS count FROM journey_stops WHERE journey_id = $1', [privateJourney.body.id])).rows[0].count).toBe(0);
+    await db.query('UPDATE users SET is_active = false WHERE id = $1', [owner]);
+    await request(app.getHttpServer()).get(`${journeyBase}/${publicJourney.body.id}`).expect(404);
+    await request(app.getHttpServer()).get(journeyBase).expect(200).expect(({ body }) => expect(body.count).toBe(0));
+  });
+
+  it('returns compact personal map features while keeping a large location list paginated', async () => {
+    await db.query(`WITH added AS (
+      INSERT INTO locations (name, coordinates) SELECT 'Performance point ' || n,
+        ST_SetSRID(ST_MakePoint(100 + (n % 100) * 0.05, 10 + (n / 100) * 0.05), 4326)
+      FROM generate_series(1, 1000) n RETURNING id
+    ) INSERT INTO user_visited_locations (user_id, location_id) SELECT $1, id FROM added`, [owner]);
+    const started = performance.now();
+    const map = await request(app.getHttpServer()).get('/api/v1/users/api_owner/travel-map').set('Authorization', token()).expect(200);
+    const elapsed = Math.round(performance.now() - started);
+    expect(map.body.statistics.location_count).toBe(1001);
+    expect(map.body.points).toHaveLength(1001);
+    expect(Buffer.byteLength(JSON.stringify(map.body))).toBeLessThan(400000);
+    const page = await request(app.getHttpServer()).get(base).set('Authorization', token()).query({ pageSize: 20 }).expect(200);
+    expect(page.body).toMatchObject({ count: 1001, hasMore: true });
+    expect(page.body.data).toHaveLength(20);
+    console.info(`Personal map smoke: 1001 points, ${elapsed} ms, ${Buffer.byteLength(JSON.stringify(map.body))} bytes; list page: 20 rows.`);
   });
 });

@@ -4,10 +4,17 @@ import { IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, 
 
 const trimNote = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() || null : value;
 
-export class VisitedLocationQueryDto {
+export class TravelFiltersDto {
+  @ApiPropertyOptional() @ValidateIf((_o: unknown, value: unknown) => value !== undefined) @Type(() => Number) @IsInt() @Min(1) @Max(9999) year?: number;
+  @ApiPropertyOptional({ maxLength: 100 }) @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
+  @ValidateIf((_o: unknown, value: unknown) => value !== undefined) @IsString() @MaxLength(100) search?: string;
+  @ApiPropertyOptional({ maxLength: 100 }) @ValidateIf((_o: unknown, value: unknown) => value !== undefined) @IsString() @MaxLength(100) country?: string;
+  @ApiPropertyOptional() @ValidateIf((_o: unknown, value: unknown) => value !== undefined) @IsUUID() location_id?: string;
+}
+
+export class VisitedLocationQueryDto extends TravelFiltersDto {
   @ApiPropertyOptional({ default: 1 }) @Type(() => Number) @IsInt() @Min(1) @Max(100000) page = 1;
   @ApiPropertyOptional({ default: 20, maximum: 50 }) @Type(() => Number) @IsInt() @Min(1) @Max(50) pageSize = 20;
-  @ApiPropertyOptional() @ValidateIf((_o: unknown, value: unknown) => value !== undefined) @IsUUID() location_id?: string;
 }
 
 export class VisitQueryDto {

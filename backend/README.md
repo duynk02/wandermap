@@ -181,6 +181,12 @@ và chỉ được upload khi lưu hồ sơ. Hủy thao tác cắt giữ nguyên
 
 ## Database migrations
 
+My Travel Map thêm `GET /users/:username/travel-map` và bộ lọc year/search/country
+cho danh sách visited. Module `journeys/` cung cấp list/create/detail/update/delete/publish,
+kiểm tra ownership, public + published, stops hợp lệ, revision và transaction.
+Tái sử dụng schema 007–008; không có migration mới.
+Xem [API, semantics riêng tư và kiểm thử My Travel Map/Journey](../docs/phase-2-step-3.md).
+
 Step 2 bổ sung `008_visited_locations_cutover.sql` cùng API `/users/me/visited-locations`
 và `/users/:username/visited-locations`, quản lý visits con qua `/:id/visits`.
 Mutation bắt buộc JWT/ownership; public list/counters lọc visibility. Pins visited cũ

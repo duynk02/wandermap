@@ -300,6 +300,8 @@ function VisitedEditor({
         });
       await Promise.all([
         client.invalidateQueries({ queryKey: QUERY_KEYS.visitedLocations.all }),
+        client.invalidateQueries({ queryKey: QUERY_KEYS.travelMap.all }),
+        client.invalidateQueries({ queryKey: QUERY_KEYS.journeys.all }),
         client.invalidateQueries({ queryKey: ["user-pins", viewer] }),
         client.invalidateQueries({ queryKey: ["profiles"] }),
       ]);

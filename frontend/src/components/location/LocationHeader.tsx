@@ -1,9 +1,8 @@
-import Link from "next/link";
-import { MapPin, Star, ArrowLeft } from "lucide-react";
+import { MapPin, Star } from "lucide-react";
 import { CATEGORY_ICONS } from "@/lib/mapbox";
-import { ROUTES } from "@/constants";
 import type { Location } from "@/types";
 import { MarkVisitedButton } from "./MarkVisitedButton";
+import { LocationBackButton } from "./LocationBackButton";
 
 interface LocationHeaderProps {
   location: Location;
@@ -16,12 +15,7 @@ export function LocationHeader({ location }: LocationHeaderProps) {
     <header className="relative overflow-hidden bg-gradient-to-b from-brand-900 to-brand-700 pb-8 pt-safe">
       {/* Back button */}
       <div className="relative z-10 flex items-center gap-3 p-4">
-        <Link href={ROUTES.explore}>
-          <button className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-sm text-white backdrop-blur-sm hover:bg-white/20 transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Bản đồ
-          </button>
-        </Link>
+        <LocationBackButton />
       </div>
 
       {/* Location info */}
