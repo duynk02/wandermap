@@ -1,15 +1,17 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { VisitedLocationsService } from '../visited-locations/visited-locations.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly db: DatabaseService, private readonly visited: VisitedLocationsService) {}
 
   async getById(userId: string) {
     const result = await this.db.query(
       `SELECT p.id, u.email, p.username, p.display_name, p.avatar_url, p.bio, p.home_city, p.country_count, p.total_posts,
-              p.followers_count, p.following_count, p.created_at
+              p.followers_count, p.following_count, p.created_at,
+              (SELECT count(*)::integer FROM user_visited_locations v WHERE v.user_id = p.id) AS visited_location_count
        FROM profiles p JOIN users u ON u.id = p.id WHERE p.id = $1 AND u.is_active = true`, [userId],
     );
     if (!result.rows[0]) throw new NotFoundException('Profile not found.');
@@ -18,7 +20,12 @@ export class UsersService {
 
   async getByUsername(username: string, viewerId?: string) {
     const result = await this.db.query(
-      `SELECT p.id, p.username, p.display_name, p.avatar_url, p.bio, p.home_city, p.country_count, p.total_posts,
+      `SELECT p.id, p.username, p.display_name, p.avatar_url, p.bio, p.home_city, p.total_posts,
+              (SELECT count(*)::integer FROM user_visited_locations v WHERE v.user_id = p.id
+                AND (v.visibility = 'public' OR v.user_id = $2::uuid)) AS visited_location_count,
+              (SELECT count(DISTINCT NULLIF(trim(l.country), ''))::integer FROM user_visited_locations v
+                JOIN locations l ON l.id = v.location_id WHERE v.user_id = p.id
+                AND (v.visibility = 'public' OR v.user_id = $2::uuid)) AS country_count,
               p.followers_count, p.following_count, p.created_at,
               ($2::uuid IS NOT NULL AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $2 AND f.following_id = p.id)) AS is_following
        FROM profiles p JOIN users u ON u.id = p.id AND u.is_active = true WHERE lower(p.username) = lower($1)`, [username, viewerId ?? null],
@@ -38,7 +45,8 @@ export class UsersService {
     if (fields.length === 0) throw new BadRequestException('Provide at least one profile field to update.');
     const result = await this.db.query(
       `UPDATE profiles SET ${fields.join(', ')} WHERE id = $1
-       RETURNING id, username, display_name, avatar_url, bio, home_city, country_count, total_posts, followers_count, following_count, created_at`, values,
+       RETURNING id, username, display_name, avatar_url, bio, home_city, country_count, total_posts, followers_count, following_count, created_at,
+         (SELECT count(*)::integer FROM user_visited_locations v WHERE v.user_id = profiles.id) AS visited_location_count`, values,
     ).catch((error: unknown) => {
       const dbError = error as { code?: string; constraint?: string };
       // The existing unique index also handles concurrent requests for the same username.
@@ -87,32 +95,44 @@ export class UsersService {
 
   async getPins(userId: string, status?: 'visited' | 'wishlist') {
     const result = await this.db.query(
-      `SELECT l.id, l.name, l.address, l.country, l.city, l.category, l.google_place_id,
+      `WITH pins AS (
+         SELECT user_id, location_id, 'visited'::text AS status, created_at FROM user_visited_locations WHERE user_id = $1
+         UNION ALL
+         SELECT up.user_id, up.location_id, up.status, up.created_at FROM user_pins up
+         WHERE up.user_id = $1 AND up.status = 'wishlist'
+           AND NOT EXISTS (SELECT 1 FROM user_visited_locations v WHERE v.user_id = up.user_id AND v.location_id = up.location_id)
+       ) SELECT l.id, l.name, l.address, l.country, l.city, l.category, l.google_place_id,
               l.post_count, l.avg_rating, l.trending_score, l.created_at,
               json_build_object('lat', ST_Y(l.coordinates), 'lng', ST_X(l.coordinates)) AS coordinates,
               up.status, up.created_at AS pinned_at
-       FROM user_pins up JOIN locations l ON l.id = up.location_id
+       FROM pins up JOIN locations l ON l.id = up.location_id
        WHERE up.user_id = $1 AND ($2::text IS NULL OR up.status = $2)
-       ORDER BY up.created_at DESC`, [userId, status ?? null],
+       ORDER BY up.created_at DESC, l.id DESC`, [userId, status ?? null],
     );
     return result.rows;
   }
 
   async upsertPin(userId: string, locationId: string, status: 'visited' | 'wishlist') {
-    const result = await this.db.query(
-      `INSERT INTO user_pins (user_id, location_id, status) VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, location_id) DO UPDATE SET status = EXCLUDED.status
-       RETURNING user_id, location_id, status, created_at, updated_at`, [userId, locationId, status],
-    ).catch((error: any) => {
-      if (error?.code === '23503') throw new NotFoundException('Location not found.');
-      throw error;
+    if (status === 'visited') {
+      const mark = await this.visited.create(userId, { location_id: locationId });
+      return { user_id: userId, location_id: locationId, status, created_at: mark.created_at, updated_at: mark.updated_at };
+    }
+    return this.visited.withOwner(userId, async (client) => {
+      const location = await client.query('SELECT id FROM locations WHERE id = $1 FOR KEY SHARE', [locationId]);
+      if (!location.rowCount) throw new NotFoundException('Location not found.');
+      const result = await client.query(`INSERT INTO user_pins (user_id, location_id, status) VALUES ($1, $2, 'wishlist')
+        ON CONFLICT (user_id, location_id) DO UPDATE SET status = EXCLUDED.status
+        RETURNING user_id, location_id, status, created_at, updated_at`, [userId, locationId]);
+      return result.rows[0];
     });
-    return result.rows[0];
   }
 
   async removePin(userId: string, locationId: string) {
-    const result = await this.db.query('DELETE FROM user_pins WHERE user_id = $1 AND location_id = $2', [userId, locationId]);
-    return { removed: (result.rowCount ?? 0) > 0 };
+    return this.visited.withOwner(userId, async (client) => {
+      const marks = await client.query('DELETE FROM user_visited_locations WHERE user_id = $1 AND location_id = $2', [userId, locationId]);
+      const pins = await client.query('DELETE FROM user_pins WHERE user_id = $1 AND location_id = $2', [userId, locationId]);
+      return { removed: (marks.rowCount ?? 0) + (pins.rowCount ?? 0) > 0 };
+    });
   }
 
   private async findIdByUsername(username: string) {

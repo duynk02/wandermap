@@ -181,6 +181,25 @@ và chỉ được upload khi lưu hồ sơ. Hủy thao tác cắt giữ nguyên
 
 ## Database migrations
 
+Step 2 bổ sung `008_visited_locations_cutover.sql` cùng API `/users/me/visited-locations`
+và `/users/:username/visited-locations`, quản lý visits con qua `/:id/visits`.
+Mutation bắt buộc JWT/ownership; public list/counters lọc visibility. Pins visited cũ
+được backfill private, không suy ra ngày đến; API pins cũ giữ shape và đọc marks chuẩn.
+Deploy migration cùng backend mới khi writer pins cũ đã dừng.
+Xem [hợp đồng đầy đủ và hướng dẫn triển khai/test Step 2](../docs/phase-2-step-2.md).
+
+Phase 2 Step 1 thêm `007_travel_map_journeys.sql`: `user_visited_locations`
+(đánh dấu duy nhất/user/location), `user_location_visits` (lịch sử theo ngày),
+`journeys` và `journey_stops`. Dữ liệu mới mặc định private; Journey mặc định draft.
+Migration không chuyển pins cũ, không thay posts/itineraries hoặc API hiện có.
+Cutover pins và API được triển khai đồng thời ở Step 2 qua migration 008 và module mới.
+Xem [tài liệu kiến trúc](../docs/phase-2-architecture.md) trước khi dùng bảng mới.
+
+Kiểm thử migration/constraints trên DB PostGIS thử nghiệm: đặt
+`WANDERMAP_TEST_DATABASE_URL`, chạy `npm run test:db` trong backend/.
+Suite không đọc DATABASE_URL ứng dụng; tạo schema tạm trong transaction rồi
+rollback toàn bộ. Thiếu biến test URL thì suite được skip. Không cần dependency mới.
+
 SQL migration ở `src/database/migrations/` là append-only. Runner dùng PostgreSQL advisory lock, chạy mỗi migration trong transaction và lưu SHA-256 checksum trong `schema_migrations`. Nếu file migration đã áp dụng bị sửa, runner dừng để tránh drift; hãy tạo migration mới thay vì chỉnh migration cũ.
 
 `docker compose down` giữ dữ liệu trong volume. Chỉ dùng `docker compose down -v` khi chắc chắn muốn xóa hoàn toàn database local.

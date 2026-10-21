@@ -1,4 +1,10 @@
+"use client";
+
 import { Globe2, MapPin, FileText } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
+import { getProfileByUsername } from "@/lib/api";
+import { QUERY_KEYS } from "@/constants";
 import type { Profile } from "@/types";
 
 interface ProfileStatsProps {
@@ -7,14 +13,20 @@ interface ProfileStatsProps {
 
 const stats = (profile: Profile) => [
   { icon: Globe2,  label: "Quốc gia",    value: profile.country_count },
-  { icon: MapPin,  label: "Địa điểm",    value: profile.total_posts },
+  { icon: MapPin,  label: "Địa điểm",    value: profile.visited_location_count ?? 0 },
   { icon: FileText, label: "Bài đăng",   value: profile.total_posts },
 ];
 
 export function ProfileStats({ profile }: ProfileStatsProps) {
+  const { user, isLoading } = useAuth();
+  const { data } = useQuery({
+    queryKey: [...QUERY_KEYS.profiles.byUsername(profile.username), "viewer", user?.id ?? "guest"],
+    queryFn: () => getProfileByUsername(profile.username),
+    enabled: !isLoading && !!user,
+  });
   return (
     <div className="grid grid-cols-3 gap-4">
-      {stats(profile).map((stat) => (
+      {stats(data ?? profile).map((stat) => (
         <div
           key={stat.label}
           className="flex flex-col items-center rounded-2xl bg-surface-elevated p-4 text-center"

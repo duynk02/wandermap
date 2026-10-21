@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ApiError } from "@/lib/api";
 import { safeNext, signIn, useRedirectIfAuthenticated } from "@/hooks/useAuth";
@@ -10,7 +10,6 @@ import { loginSchema, type LoginInput } from "@/lib/validations";
 import { ROUTES } from "@/constants";
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const next = safeNext(searchParams.get("next"), ROUTES.feed);
   useRedirectIfAuthenticated(next);
@@ -30,8 +29,8 @@ export function LoginForm() {
       });
       return;
     }
-    router.push(next);
-    router.refresh();
+    // The authenticated-state effect above performs the return navigation once.
+    // Competing push/replace/refresh calls can abort the destination request.
   };
 
   return (
