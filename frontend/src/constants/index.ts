@@ -40,6 +40,15 @@ export const LOCATION_CATEGORIES: {
 
 // Query keys for TanStack Query
 export const QUERY_KEYS = {
+  travelMap: {
+    all: ["travel-map"] as const,
+    data: (username: string, viewer: string, filters: object) => ["travel-map", username, viewer, filters] as const,
+  },
+  journeys: {
+    all: ["journeys"] as const,
+    list: (username: string, viewer: string) => ["journeys", "list", username, viewer] as const,
+    byId: (id: string, viewer: string) => ["journeys", "detail", id, viewer] as const,
+  },
   visitedLocations: {
     all: ["visited-locations"] as const,
     mine: (viewer: string, filters: object = {}) => ["visited-locations", "mine", viewer, filters] as const,
@@ -88,6 +97,7 @@ export const ROUTES = {
   location: (id: string) => `/location/${id}`,
   post: (id: string) => `/post/${id}`,
   itinerary: (id: string) => `/itinerary/${id}`,
+  journey: (id: string) => `/journey/${id}`,
   newPost: "/post/new",
 } as const;
 

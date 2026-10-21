@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
-import { CreateVisitDto, CreateVisitedLocationDto, UpdateVisitDto, UpdateVisitedLocationDto, VisitQueryDto, VisitedLocationQueryDto } from './dto/visited-location.dto';
+import { CreateVisitDto, CreateVisitedLocationDto, TravelFiltersDto, UpdateVisitDto, UpdateVisitedLocationDto, VisitQueryDto, VisitedLocationQueryDto } from './dto/visited-location.dto';
 
 export interface VisitedLocationResponse {
   id: string;
@@ -28,11 +28,18 @@ export interface LocationVisitResponse {
   updated_at: string;
 }
 
-const MARK_FIELDS = `v.id, v.user_id, v.location_id, v.note, v.visibility, v.created_at, v.updated_at,
-  (SELECT count(*)::integer FROM user_location_visits visit WHERE visit.visited_location_id = v.id) AS visit_count,
-  (SELECT max(visit.visited_at)::text FROM user_location_visits visit WHERE visit.visited_location_id = v.id) AS last_visited_at,
+const dateFilter = (alias: string) => `($4::integer IS NULL OR (${alias}.visited_at >= make_date($4, 1, 1) AND ${alias}.visited_at < make_date($4 + 1, 1, 1)))`;
+const markFields = (filtered = false) => `v.id, v.user_id, v.location_id, v.note, v.visibility, v.created_at, v.updated_at,
+  (SELECT count(*)::integer FROM user_location_visits visit WHERE visit.visited_location_id = v.id ${filtered ? `AND ${dateFilter('visit')}` : ''}) AS visit_count,
+  (SELECT max(visit.visited_at)::text FROM user_location_visits visit WHERE visit.visited_location_id = v.id ${filtered ? `AND ${dateFilter('visit')}` : ''}) AS last_visited_at,
   json_build_object('id', l.id, 'name', l.name, 'address', l.address, 'country', l.country, 'city', l.city, 'category', l.category,
     'coordinates', json_build_object('lat', ST_Y(l.coordinates), 'lng', ST_X(l.coordinates))) AS location`;
+const MARK_FIELDS = markFields();
+const VISIBLE = `v.user_id = $1 AND u.is_active = true AND (v.user_id = $2::uuid OR v.visibility = 'public')`;
+const FILTERED = `${VISIBLE} AND ($3::uuid IS NULL OR v.location_id = $3)
+  AND ($4::integer IS NULL OR EXISTS (SELECT 1 FROM user_location_visits d WHERE d.visited_location_id = v.id AND ${dateFilter('d')}))
+  AND ($5::text IS NULL OR strpos(lower(public.unaccent(concat_ws(' ', l.name, l.city, l.country))), lower(public.unaccent($5))) > 0)
+  AND ($6::text IS NULL OR l.country = $6)`;
 const VISIT_FIELDS = 'id, visited_location_id, visited_at::text, note, created_at, updated_at';
 
 @Injectable()
@@ -44,29 +51,63 @@ export class VisitedLocationsService {
   }
 
   async listPublic(username: string, viewerId: string | undefined, query: VisitedLocationQueryDto) {
+    const owner = await this.findOwner(username);
+    return this.list(owner, viewerId, query);
+  }
+
+  private async findOwner(username: string) {
     const owner = await this.db.query<{ id: string }>(`SELECT p.id FROM profiles p JOIN users u ON u.id = p.id
       WHERE lower(p.username) = lower($1) AND u.is_active = true`, [username]);
     if (!owner.rows[0]) throw new NotFoundException('Không tìm thấy hồ sơ.');
-    return this.list(owner.rows[0].id, viewerId, query);
+    return owner.rows[0].id;
+  }
+
+  private filterValues(owner: string, viewer: string | undefined, query: TravelFiltersDto) {
+    return [owner, viewer ?? null, query.location_id ?? null, query.year ?? null, query.search || null, query.country || null];
   }
 
   private async list(owner: string, viewer: string | undefined, query: VisitedLocationQueryDto) {
-    const { page, pageSize, location_id } = query;
-    const values = [owner, viewer ?? null, location_id ?? null];
-    const where = `v.user_id = $1 AND u.is_active = true AND (v.user_id = $2::uuid OR v.visibility = 'public')
-      AND ($3::uuid IS NULL OR v.location_id = $3)`;
+    const { page, pageSize } = query;
+    const values = this.filterValues(owner, viewer, query);
     // A single statement gives the count and page the same snapshot, including empty pages.
     const result = await this.db.query<{ data: VisitedLocationResponse[]; count: number }>(`WITH visible AS (
-      SELECT ${MARK_FIELDS} FROM user_visited_locations v JOIN locations l ON l.id = v.location_id
-      JOIN users u ON u.id = v.user_id WHERE ${where}
+      SELECT ${markFields(true)} FROM user_visited_locations v JOIN locations l ON l.id = v.location_id
+      JOIN users u ON u.id = v.user_id WHERE ${FILTERED}
     ) SELECT (SELECT count(*)::integer FROM visible) AS count,
       COALESCE((SELECT json_agg(item ORDER BY item.created_at DESC, item.id DESC) FROM
-        (SELECT * FROM visible ORDER BY created_at DESC, id DESC LIMIT $4 OFFSET $5) item), '[]'::json) AS data`,
+        (SELECT * FROM visible ORDER BY created_at DESC, id DESC LIMIT $7 OFFSET $8) item), '[]'::json) AS data`,
     [...values, pageSize, (page - 1) * pageSize]);
     return this.page(result.rows[0].data, result.rows[0].count, page, pageSize);
   }
 
-  async get(userId: string, id: string) {
+  async travelMap(username: string, viewerId: string | undefined, query: TravelFiltersDto) {
+    const owner = await this.findOwner(username);
+    const result = await this.db.query(`WITH visible AS (
+      SELECT ${markFields(true)} FROM user_visited_locations v JOIN locations l ON l.id = v.location_id
+      JOIN users u ON u.id = v.user_id WHERE ${FILTERED}
+    ) SELECT json_build_object(
+      'location_count', (SELECT count(*)::integer FROM visible),
+      'visit_count', (SELECT COALESCE(sum(visit_count), 0)::integer FROM visible),
+      'journey_count', (SELECT count(*)::integer FROM journeys j WHERE j.user_id = $1 AND (j.user_id = $2::uuid OR (j.visibility = 'public' AND j.status = 'published')))
+    ) AS statistics,
+    json_build_object(
+      'years', COALESCE((SELECT json_agg(y ORDER BY y DESC) FROM (
+        SELECT DISTINCT extract(year FROM d.visited_at)::integer AS y FROM user_location_visits d
+        JOIN user_visited_locations v ON v.id = d.visited_location_id JOIN users u ON u.id = v.user_id WHERE ${VISIBLE}
+      ) years), '[]'::json),
+      'countries', COALESCE((SELECT json_agg(country ORDER BY country) FROM (
+        SELECT DISTINCT l.country FROM user_visited_locations v JOIN users u ON u.id = v.user_id JOIN locations l ON l.id = v.location_id
+        WHERE ${VISIBLE} AND NULLIF(btrim(l.country), '') IS NOT NULL
+      ) countries), '[]'::json)
+    ) AS options,
+    COALESCE((SELECT json_agg(json_build_object(
+      'id', id, 'location_id', location_id, 'name', location->>'name', 'city', location->>'city', 'country', location->>'country',
+      'coordinates', location->'coordinates', 'last_visited_at', last_visited_at, 'visit_count', visit_count, 'visibility', visibility
+    ) ORDER BY created_at DESC, id DESC) FROM visible), '[]'::json) AS points`, this.filterValues(owner, viewerId, query));
+    return result.rows[0];
+  }
+
+  async get(userId: string, id: string): Promise<VisitedLocationResponse> {
     const result = await this.db.query<VisitedLocationResponse>(`SELECT ${MARK_FIELDS} FROM user_visited_locations v
       JOIN locations l ON l.id = v.location_id JOIN users u ON u.id = v.user_id
       WHERE v.id = $1 AND v.user_id = $2 AND u.is_active = true`, [id, userId]);
@@ -90,7 +131,7 @@ export class VisitedLocationsService {
     return result.rows[0];
   }
 
-  async create(userId: string, dto: CreateVisitedLocationDto) {
+  async create(userId: string, dto: CreateVisitedLocationDto): Promise<VisitedLocationResponse> {
     const id = await this.withOwner(userId, async (client) => {
       const location = await client.query('SELECT id FROM locations WHERE id = $1 FOR KEY SHARE', [dto.location_id]);
       if (!location.rowCount) throw new NotFoundException('Địa điểm không còn tồn tại.');
@@ -109,7 +150,7 @@ export class VisitedLocationsService {
     return this.get(userId, id);
   }
 
-  async update(userId: string, id: string, dto: UpdateVisitedLocationDto) {
+  async update(userId: string, id: string, dto: UpdateVisitedLocationDto): Promise<VisitedLocationResponse> {
     if (dto.note === undefined && dto.visibility === undefined) throw new BadRequestException('Hãy chọn thông tin cần cập nhật.');
     await this.withOwner(userId, async (client) => {
       await this.lockMark(client, userId, id);

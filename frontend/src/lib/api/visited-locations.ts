@@ -3,14 +3,19 @@ import type {
   PaginatedResponse,
   TravelVisibility,
   VisitedLocation,
+  TravelFilters,
+  TravelMapData,
 } from "@/types";
 import { apiFetch } from "./client";
 
-export interface VisitedLocationQuery {
+export interface VisitedLocationQuery extends TravelFilters {
   page?: number;
   pageSize?: number;
   location_id?: string;
 }
+
+export const getTravelMap = (username: string, filters: TravelFilters = {}) =>
+  apiFetch<TravelMapData>(`/users/${encodeURIComponent(username)}/travel-map`, { query: { ...filters } });
 export interface UpdateVisitedLocationRequest {
   note?: string | null;
   visibility?: TravelVisibility;

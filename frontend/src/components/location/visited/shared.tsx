@@ -47,6 +47,7 @@ export function TravelConfirm({
   description,
   label,
   pending = false,
+  tone = "danger",
   onCancel,
   onConfirm,
 }: {
@@ -55,6 +56,7 @@ export function TravelConfirm({
   description: string;
   label: string;
   pending?: boolean;
+  tone?: "danger" | "primary";
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -99,7 +101,7 @@ export function TravelConfirm({
             </button>
             <button
               type="button"
-              className={`${primaryClass} bg-red-600 hover:bg-red-700 focus-visible:ring-red-500`}
+              className={`${primaryClass} ${tone === "danger" ? "bg-red-600 hover:bg-red-700 focus-visible:ring-red-500" : ""}`}
               disabled={pending}
               onClick={onConfirm}
             >

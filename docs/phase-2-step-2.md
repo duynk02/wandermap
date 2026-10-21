@@ -14,7 +14,7 @@ Step 2 triển khai đánh dấu địa điểm đã đến và quản lý từn
 
 Dialog có focus trap, khôi phục focus về nút mở, Escape/backdrop để đóng, xác nhận khi có nội dung chưa lưu, cảnh báo khi reload và chặn thao tác trong lúc ghi dữ liệu. Mobile dùng bottom sheet có vùng nội dung cuộn và nút lưu cố định; desktop dùng dialog; hỗ trợ dark theme/reduced motion. Lỗi lưu giữ nội dung để thử lại; lỗi tải không giả định địa điểm chưa được đánh dấu.
 
-My Travel Map nâng cao, bộ lọc và marker công khai trên Profile thuộc Step 3. Map Profile hiện tại tiếp tục đọc pins tương thích và phản ánh đánh dấu mới sau invalidation. Thống kê địa điểm trên Profile đếm **địa điểm duy nhất được phép xem**, không dùng số bài đăng; chủ tài khoản tải lại thống kê có auth để thấy cả dữ liệu private của mình.
+My Travel Map, bộ lọc và marker công khai trên Profile đã được mở rộng trong [Step 3](phase-2-step-3.md), đọc marks chuẩn và invalidate sau thay đổi visited. Thống kê địa điểm trên Profile đếm **địa điểm duy nhất được phép xem**, không dùng số bài đăng; chủ tài khoản tải lại thống kê có auth để thấy cả dữ liệu private của mình.
 
 ## API
 

@@ -2,7 +2,7 @@
 
 Step 2 đã có implementation API/UI và migration 008; xem [Visited Locations API & UI](phase-2-step-2.md). Tài liệu dưới đây giữ bối cảnh và các quyết định tại Step 1; trạng thái cutover/API mới nhất nằm trong tài liệu Step 2.
 
-Phạm vi: audit, thiết kế dữ liệu, migration bổ sung và kiểm thử constraints trên PostgreSQL/PostGIS. Step 1 chưa mở API Visited/Journey, chưa đổi tab Profile, chưa xuất ảnh hoặc chia sẻ Feed.
+Phạm vi tài liệu Step 1: audit, thiết kế dữ liệu, migration bổ sung và kiểm thử constraints trên PostgreSQL/PostGIS. Step 1 chưa mở API Visited/Journey, chưa đổi tab Profile, chưa xuất ảnh hoặc chia sẻ Feed. API và giao diện đã được triển khai tiếp trong [Step 2](phase-2-step-2.md) và [My Travel Map/Journey Builder](phase-2-step-3.md); các tham chiếu Step 4 bên dưới mô tả kế hoạch kiến trúc ban đầu.
 
 ## 1. Audit mã nguồn
 
