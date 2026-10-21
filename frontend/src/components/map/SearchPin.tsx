@@ -1,8 +1,10 @@
 "use client";
 
-import { MapPin, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, MapPin, PenLine, X } from "lucide-react";
 import { Marker } from "react-map-gl";
 import { useMapStore } from "@/stores/mapStore";
+import { postLocationHref } from "@/lib/post-location";
 
 /** Pin dropped on the place chosen in the search box. Replaced by the next search; X removes it. */
 export function SearchPin() {
@@ -13,16 +15,30 @@ export function SearchPin() {
   return (
     <Marker longitude={pin.longitude} latitude={pin.latitude} anchor="bottom" style={{ zIndex: 10 }}>
       <div className="flex flex-col items-center">
-        <div className="mb-1 flex max-w-[220px] items-center gap-1 rounded-full bg-white py-1 pl-3 pr-1.5 text-xs font-semibold text-ink shadow-md">
-          <span className="truncate">{pin.name}</span>
-          <button
-            type="button"
-            onClick={clearSearchPin}
-            aria-label="Xóa ghim"
-            className="rounded-full p-0.5 text-ink-subtle hover:bg-surface-muted hover:text-ink"
+        <div className="mb-2 w-[280px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-3 text-ink shadow-xl">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1 py-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Địa điểm đã chọn</p>
+              <p className="mt-1 break-words text-sm font-semibold leading-snug">{pin.name}</p>
+            </div>
+            <button
+              type="button"
+              onClick={clearSearchPin}
+              aria-label="Xóa ghim"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              <X className="h-[18px] w-[18px]" aria-hidden />
+            </button>
+          </div>
+          <Link
+            href={postLocationHref(pin.selection)}
+            prefetch={false}
+            className="mt-3 flex min-h-11 items-center gap-2 rounded-xl bg-brand-500 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
           >
-            <X className="h-3 w-3" />
-          </button>
+            <PenLine className="h-4 w-4 shrink-0" aria-hidden />
+            <span className="flex-1">Viết bài về địa điểm này</span>
+            <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden />
+          </Link>
         </div>
         <MapPin className="h-9 w-9 fill-red-500 text-white drop-shadow-md" strokeWidth={1.5} />
       </div>

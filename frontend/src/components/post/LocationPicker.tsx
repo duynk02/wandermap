@@ -3,15 +3,11 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Loader2, MapPin, Search, X } from "lucide-react";
-import { searchPlaces, type PlaceSuggestion } from "@/lib/api";
+import { searchPlaces } from "@/lib/api";
 import { useMapStore } from "@/stores/mapStore";
 import { LOCATION_CATEGORIES } from "@/constants";
 import { cn } from "@/lib/utils";
-import type { Location } from "@/types";
-
-export type PickedLocation =
-  | { kind: "existing"; location: Location }
-  | { kind: "new"; place: PlaceSuggestion };
+import type { PickedLocation } from "@/lib/post-location";
 
 interface LocationPickerProps {
   value: PickedLocation | null;

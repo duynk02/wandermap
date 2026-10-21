@@ -13,6 +13,7 @@ import { LOCATION_CATEGORIES, ROUTES } from "@/constants";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "@/components/notification/NotificationBell";
 import { ThemeSelector } from "@/components/layout/ThemeSelector";
+import type { PickedLocation } from "@/lib/post-location";
 
 type SearchScope = "vn" | "world";
 /** Zoom used when a search result is chosen (neighbourhood/POI level). */
@@ -25,6 +26,7 @@ export function MapTopbar() {
   const { isAuthenticated, profile } = useAuth();
   const setFlyToTarget = useMapStore((state) => state.setFlyToTarget);
   const setSearchPin = useMapStore((state) => state.setSearchPin);
+  const setSelectedLocation = useMapStore((state) => state.setSelectedLocation);
   const viewport = useMapStore((state) => state.viewport);
 
   const [input, setInput] = useState("");
@@ -80,12 +82,9 @@ export function MapTopbar() {
     existing.length === 0 &&
     external.length === 0;
 
-  const handleSelect = (
-    name: string,
-    lat: number,
-    lng: number,
-  ) => {
-
+  const handleSelect = (selection: PickedLocation) => {
+    const { name, coordinates: { lat, lng } } =
+      selection.kind === "existing" ? selection.location : selection.place;
     if (
       !Number.isFinite(lat) ||
       !Number.isFinite(lng) ||
@@ -98,8 +97,9 @@ export function MapTopbar() {
       return;
     }
 
+    setSelectedLocation(null);
     setFlyToTarget({ longitude: lng, latitude: lat, zoom: SEARCH_FLY_ZOOM });
-    setSearchPin({ name, longitude: lng, latitude: lat });
+    setSearchPin({ name, longitude: lng, latitude: lat, selection });
     setInput(name);
     setQuery("");
     setIsOpen(false);
@@ -219,11 +219,7 @@ export function MapTopbar() {
                           key={location.id}
                           type="button"
                           onClick={() =>
-                            handleSelect(
-                              location.name,
-                              location.coordinates.lat,
-                              location.coordinates.lng,
-                            )
+                            handleSelect({ kind: "existing", location })
                           }
                           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-surface-muted"
                         >
@@ -260,11 +256,7 @@ export function MapTopbar() {
                           key={place.key}
                           type="button"
                           onClick={() =>
-                            handleSelect(
-                              place.name,
-                              place.coordinates.lat,
-                              place.coordinates.lng,
-                            )
+                            handleSelect({ kind: "new", place })
                           }
                           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-surface-muted"
                         >

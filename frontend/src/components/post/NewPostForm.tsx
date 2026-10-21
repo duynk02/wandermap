@@ -13,7 +13,8 @@ import { LOCATION_CATEGORIES, MAX_POST_IMAGES, QUERY_KEYS, ROUTES } from "@/cons
 import { cn } from "@/lib/utils";
 import type { LocationCategory, PostVisibility } from "@/types";
 import { ImageUploader } from "./ImageUploader";
-import { LocationPicker, type PickedLocation } from "./LocationPicker";
+import { LocationPicker } from "./LocationPicker";
+import type { PickedLocation } from "@/lib/post-location";
 
 const VISIBILITY_OPTIONS: { value: PostVisibility; label: string }[] = [
   { value: "public", label: "Công khai" },
@@ -28,27 +29,31 @@ const fieldClass =
 
 const MAX_CONTENT = 2000;
 
-export function NewPostForm() {
+export function NewPostForm({ initialLocation = null, locationError }: {
+  initialLocation?: PickedLocation | null;
+  locationError?: string;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const today = format(new Date(), "yyyy-MM-dd");
-  const [picked, setPicked] = useState<PickedLocation | null>(null);
-  const [category, setCategory] = useState<LocationCategory>("other");
+  const [picked, setPicked] = useState<PickedLocation | null>(initialLocation);
+  const [category, setCategory] = useState<LocationCategory>(initialLocation?.kind === "new" ? initialLocation.place.category : "other");
   const [content, setContent] = useState("");
   const [rating, setRating] = useState(0);
   const [visitedAt, setVisitedAt] = useState(today);
   const [visibility, setVisibility] = useState<PostVisibility>("public");
   const [images, setImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>(locationError ? { location: locationError } : {});
   const [submitting, setSubmitting] = useState(false);
 
   // The access token only exists in the browser, so the redirect for guests happens here.
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.replace(`${ROUTES.login}?next=${encodeURIComponent(ROUTES.newPost)}`);
+      const next = `${window.location.pathname}${window.location.search}`;
+      router.replace(`${ROUTES.login}?next=${encodeURIComponent(next)}`);
     }
   }, [authLoading, isAuthenticated, router]);
 

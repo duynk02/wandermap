@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import type { MapViewport, MapBounds, LocationFilters, Location } from "@/types";
+import type { MapViewport, MapBounds, LocationFilters } from "@/types";
+import type { PickedLocation } from "@/lib/post-location";
 import { DEFAULT_VIEWPORT } from "@/lib/mapbox";
 
 /** One-shot request for the map to fly somewhere (consumed by MapCanvas). */
@@ -14,6 +15,7 @@ export interface SearchPin {
   name: string;
   longitude: number;
   latitude: number;
+  selection: PickedLocation;
 }
 
 interface MapState {
