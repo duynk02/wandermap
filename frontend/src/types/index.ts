@@ -27,6 +27,8 @@ export interface Profile {
   bio: string | null;
   home_city: string | null;
   country_count: number;
+  /** Unique visited locations visible to the viewer (independent of post count). */
+  visited_location_count?: number;
   total_posts: number;
   followers_count: number;
   following_count: number;
@@ -110,6 +112,30 @@ export interface ItineraryStop {
 export interface UserPin extends Location {
   status: PinStatus;
   pinned_at: string;
+}
+
+export type TravelVisibility = "public" | "private";
+
+export interface VisitedLocation {
+  id: string;
+  user_id: string;
+  location_id: string;
+  note: string | null;
+  visibility: TravelVisibility;
+  created_at: string;
+  updated_at: string;
+  visit_count: number;
+  last_visited_at: string | null;
+  location: Pick<Location, "id" | "name" | "address" | "country" | "city" | "category" | "coordinates">;
+}
+
+export interface LocationVisit {
+  id: string;
+  visited_location_id: string;
+  visited_at: string;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ── Map Types ───────────────────────────────────────────────────────────────

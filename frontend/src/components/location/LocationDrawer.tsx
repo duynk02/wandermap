@@ -10,6 +10,7 @@ import { useMapStore } from "@/stores/mapStore";
 import { QUERY_KEYS, ROUTES } from "@/constants";
 import { PostCard } from "@/components/post/PostCard";
 import { cn } from "@/lib/utils";
+import { MarkVisitedButton } from "./MarkVisitedButton";
 
 async function fetchLocationPreview(id: string) {
   const [location, posts] = await Promise.all([getLocationById(id), getPostsByLocation(id, 1)]);
@@ -18,7 +19,7 @@ async function fetchLocationPreview(id: string) {
 }
 
 export function LocationDrawer() {
-  const { selectedLocationId, isDrawerOpen, setDrawerOpen, setSelectedLocation } = useMapStore();
+  const { selectedLocationId, isDrawerOpen, setDrawerOpen } = useMapStore();
 
   const { data, isLoading } = useQuery({
     queryKey: QUERY_KEYS.locations.byId(selectedLocationId ?? ""),
@@ -28,7 +29,8 @@ export function LocationDrawer() {
 
   // Close on Escape key
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
+    // Nested Radix dialogs handle Escape first; keep the underlying drawer open.
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector('[role="dialog"][data-state="open"]')) setDrawerOpen(false); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [setDrawerOpen]);
@@ -81,7 +83,7 @@ export function LocationDrawer() {
   );
 }
 
-function DrawerContent({ data }: { data: any }) {
+function DrawerContent({ data }: { data: Awaited<ReturnType<typeof fetchLocationPreview>> }) {
   const { location, posts } = data;
 
   return (
@@ -103,11 +105,12 @@ function DrawerContent({ data }: { data: any }) {
           )}
           <span>{location.post_count} bài đăng</span>
         </div>
+        <div className="mt-4"><MarkVisitedButton location={location} /></div>
       </div>
 
       {/* Preview posts */}
       <div className="space-y-4 px-6">
-        {posts.data?.slice(0, 3).map((post: any) => (
+        {posts.data?.slice(0, 3).map((post) => (
           <PostCard key={post.id} post={post} compact />
         ))}
       </div>

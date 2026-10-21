@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./visited-locations";
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 const emailSchema = z.string().email("Email không hợp lệ").max(254);

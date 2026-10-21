@@ -3,6 +3,7 @@ import { MapPin, Star, ArrowLeft } from "lucide-react";
 import { CATEGORY_ICONS } from "@/lib/mapbox";
 import { ROUTES } from "@/constants";
 import type { Location } from "@/types";
+import { MarkVisitedButton } from "./MarkVisitedButton";
 
 interface LocationHeaderProps {
   location: Location;
@@ -49,6 +50,7 @@ export function LocationHeader({ location }: LocationHeaderProps) {
             </div>
           </div>
         </div>
+        <div className="mt-5 pb-3"><MarkVisitedButton location={location} variant="hero" /></div>
       </div>
 
       {/* Decorative wave */}

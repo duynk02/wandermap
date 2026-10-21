@@ -40,6 +40,12 @@ export const LOCATION_CATEGORIES: {
 
 // Query keys for TanStack Query
 export const QUERY_KEYS = {
+  visitedLocations: {
+    all: ["visited-locations"] as const,
+    mine: (viewer: string, filters: object = {}) => ["visited-locations", "mine", viewer, filters] as const,
+    visits: (viewer: string, id: string) => ["visited-locations", "visits", viewer, id] as const,
+    public: (username: string, viewer: string, filters: object = {}) => ["visited-locations", "profile", username, viewer, filters] as const,
+  },
   locations: {
     all: ["locations"] as const,
     viewport: (bounds: object) => ["locations", "viewport", bounds] as const,

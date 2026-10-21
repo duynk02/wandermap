@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import Map, { Marker } from "react-map-gl";
+import Map, { Marker, NavigationControl } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_STYLE, DEFAULT_VIEWPORT } from "@/lib/mapbox";
 import { getMyPins } from "@/lib/api";
@@ -38,8 +38,10 @@ export function ProfileTravelMap({ userId }: ProfileTravelMapProps) {
         mapStyle={MAPBOX_STYLE}
         initialViewState={DEFAULT_VIEWPORT}
         style={{ width: "100%", height: "100%" }}
-        scrollZoom={false}
+        scrollZoom
+        touchZoomRotate
       >
+        <NavigationControl position="bottom-right" showCompass={false} />
         {pins.map((pin) => (
           <Marker
             key={pin.id}

@@ -2,6 +2,7 @@ export * from "./client";
 export * from "./locations";
 export * from "./posts";
 export * from "./users";
+export * from "./visited-locations";
 export * from "./comments";
 export * from "./notifications";
 export * from "./places";

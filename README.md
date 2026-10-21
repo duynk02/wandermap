@@ -278,7 +278,16 @@ Migrations chính nằm tại `backend/src/database/migrations/`:
 003_comments.sql
 004_notifications.sql
 005_comment_edit.sql
+006_profile_editing.sql
+007_travel_map_journeys.sql
+008_visited_locations_cutover.sql
 ```
+
+Phase 2 Step 1 bổ sung schema đã đến/Journey. Step 2 thêm API và giao diện đánh dấu
+ở trang/panel địa điểm, quản lý ngày ghé thăm và quyền riêng tư. Migration 008 chuyển
+pins visited cũ thành đánh dấu private, không gán ngày giả; cần deploy cùng backend
+Step 2 và dừng writer pins cũ trong lúc cutover. Xem [hướng dẫn API/UI, migration và tests](docs/phase-2-step-2.md)
+và [thiết kế kiến trúc](docs/phase-2-architecture.md).
 
 Các domain dữ liệu cốt lõi: `users`, `profiles`, `locations` (tọa độ PostGIS), `posts`, `itineraries`, `itinerary_stops`, `follows`, `likes`, `saves`, cùng những cấu trúc bổ sung trong các migration sau.
 

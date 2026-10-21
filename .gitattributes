@@ -1,0 +1,5 @@
+# Preserve exact migration bytes across Windows/Linux checkouts.
+# Older migrations retain their current handling and recorded checksums.
+backend/src/database/migrations/006_profile_editing.sql text eol=lf
+backend/src/database/migrations/007_travel_map_journeys.sql text eol=lf
+backend/src/database/migrations/008_visited_locations_cutover.sql text eol=lf
