@@ -21,6 +21,7 @@ import {
   secondaryClass,
 } from "@/components/location/visited/shared";
 import { JourneyEditor } from "./JourneyCollection";
+import { JourneyExportButton } from "./JourneyExportButton";
 
 export function JourneyDetail({ id }: { id: string }) {
   const { user, isLoading } = useAuth();
@@ -107,14 +108,20 @@ export function JourneyDetail({ id }: { id: string }) {
                 WanderMap Journey
               </p>
               {owner && (
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold backdrop-blur hover:bg-white/25"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Chỉnh sửa
-                </button>
+                <div className="flex items-center gap-2">
+                  <JourneyExportButton
+                    input={{ title: journey.title, points, style: journey.style_config }}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold backdrop-blur hover:bg-white/25"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold backdrop-blur hover:bg-white/25"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Chỉnh sửa
+                  </button>
+                </div>
               )}
             </div>
             <h1 className="mt-5 break-words text-3xl font-bold md:text-4xl">

@@ -57,6 +57,7 @@ import {
   travelError,
 } from "@/components/location/visited/shared";
 import { useAuth } from "@/hooks/useAuth";
+import { JourneyExportButton } from "./JourneyExportButton";
 
 function StopRow({
   stop,
@@ -326,6 +327,10 @@ export function JourneyBuilder({
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <JourneyExportButton
+                input={{ title: watch("title"), points, style }}
+                disabled={pending || points.length !== stops.length}
+              />
               <button
                 type="button"
                 className="rounded-xl p-3 text-ink-muted hover:bg-surface-muted"

@@ -2,6 +2,8 @@
 
 Triển khai Step 3 và phần Journey Builder được yêu cầu kèm theo, trên schema 007–008 và API Step 2 hiện có. Không thêm dependency, migration hoặc thay đổi auth/storage. Itineraries tiếp tục là module lập kế hoạch độc lập.
 
+Cập nhật tiếp theo: xuất poster PNG đã được triển khai riêng tại [Step 5 — Export Journey Image](phase-2-step-5.md). Các mô tả “chưa xuất ảnh” bên dưới phản ánh phạm vi khi triển khai Step 3. Journey Post/Feed vẫn chưa triển khai.
+
 ## Trải nghiệm
 
 Mở **Profile → Bản đồ**:

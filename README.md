@@ -27,7 +27,7 @@ WanderMap phát triển quanh ba trải nghiệm:
 
 **Kiến trúc hiện tại:** `frontend/` (Next.js) giao tiếp với `backend/` (NestJS REST API); backend sử dụng PostgreSQL + PostGIS.
 
-**Hướng phát triển tiếp theo:** hoàn thiện trải nghiệm Feed, xuất ảnh và chia sẻ Journey lên Feed, thông báo thời gian thực qua WebSocket và nhắn tin. My Travel Map/Journey Builder đã có bản MVP; xem hướng dẫn Phase 2 bên dưới.
+**Tiến độ hiện tại:** Phase 1 đã được xác nhận hoàn tất; Phase 2 đã có My Travel Map/Journey Builder MVP và xuất ảnh PNG. Phần tiếp theo là chia sẻ Journey lên Feed, sau đó tới realtime notifications và nhắn tin. Xem hướng dẫn Phase 2 bên dưới.
 
 ## Công nghệ sử dụng
 
@@ -228,7 +228,7 @@ Mở **http://localhost:3000**. Nếu thay `API_INTERNAL_URL`, restart hoặc re
 | Bài đăng | Tạo/xem/sửa/xóa bài, ảnh, rating, gắn location, feed công khai/following | Image Lightbox chưa thấy trong ZIP |
 | Tương tác xã hội | Follow/unfollow, like/unlike, save/unsave, bình luận và replies | Tiếp tục hoàn thiện UX và các edge cases |
 | Profile | Trang hồ sơ, chỉ số, bản đồ cá nhân; `PATCH /users/me` hỗ trợ tên, avatar URL và bio | Form chỉnh sửa đầy đủ, cover, username, website còn là kế hoạch |
-| Travel map & Journey | Visited/wishlist, lịch sử ghé thăm; bản đồ Profile/bộ lọc/thống kê; Journey Builder nháp/công khai | Xuất ảnh, Journey Post và Travel Passport chưa có |
+| Travel map & Journey | Visited/wishlist, lịch sử ghé thăm; bản đồ Profile/bộ lọc/thống kê; Journey Builder nháp/công khai; xuất poster PNG 1:1 và 4:5 | Journey Post và Travel Passport chưa có |
 | Itineraries | Backend có API itinerary và itinerary stops | Không đồng nghĩa đã có trình dựng hành trình drag-and-drop trên frontend |
 | Notifications | Backend API danh sách/chưa đọc/đánh dấu tất cả; frontend có chuông và danh sách | Frontend hiện polling unread mỗi 30 giây, **chưa phải Socket.IO realtime** |
 | Upload ảnh | API `POST /uploads/images` và xử lý ảnh WebP | Lưu local disk; cần kế hoạch storage bền vững khi deploy nhiều instance |
@@ -285,8 +285,8 @@ Migrations chính nằm tại `backend/src/database/migrations/`:
 
 Phase 2 Step 3 đã mở rộng tab bản đồ Profile với danh sách, bộ lọc, thống kê và
 Journey Builder: chọn/sắp xếp điểm, preview Mapbox, lưu nháp/công khai, sửa/xóa theo quyền.
-Xem [hướng dẫn My Travel Map & Journey](docs/phase-2-step-3.md). Xuất ảnh và Journey Post/Feed
-vẫn thuộc các bước tiếp theo.
+Xem [hướng dẫn My Travel Map & Journey](docs/phase-2-step-3.md) và
+[xuất ảnh Journey PNG](docs/phase-2-step-5.md). Journey Post/Feed là bước tiếp theo sau export.
 
 Phase 2 Step 1 bổ sung schema đã đến/Journey. Step 2 thêm API và giao diện đánh dấu
 ở trang/panel địa điểm, quản lý ngày ghé thăm và quyền riêng tư. Migration 008 chuyển
@@ -310,18 +310,19 @@ Các domain dữ liệu cốt lõi: `users`, `profiles`, `locations` (tọa đ�
 
 Roadmap là **kế hoạch**, không phải các tính năng được xác nhận đã triển khai. Thứ tự có thể thay đổi theo tiến độ và phản hồi người dùng.
 
-### Phase 1 — Profile Editing & Feed UX (ưu tiên hiện tại)
+### Phase 1 — Profile Editing & Feed UX (đã xác nhận hoàn tất)
 
-- [ ] **Profile Editing:** thiết kế form responsive và triển khai cập nhật avatar, cover, display name, username, bio và các trường tùy chọn. Tái sử dụng endpoint/profile upload sẵn có; chỉ bổ sung DTO/migration cho trường chưa hỗ trợ.
-- [ ] **Image Lightbox:** nhấn ảnh trên Feed để xem toàn màn hình trong overlay; hỗ trợ next/previous, bàn phím, swipe, đóng bằng Esc/X, giữ nguyên scroll và Feed state.
-- [ ] **Feed polish:** loading/skeleton, trạng thái lỗi, giao diện mobile và kiểm tra regression tương tác.
+- [x] **Profile Editing:** cập nhật avatar, cover, display name, username, bio và các trường tùy chọn.
+- [x] **Image Lightbox:** xem ảnh Feed toàn màn hình, điều hướng ảnh và giữ trạng thái Feed.
+- [x] **Feed polish:** loading, scroll và các trạng thái Feed.
 
 ### Phase 2 — Travel Footprint & Journey Flex
 
 - [x] **My Travel Footprint:** bản đồ, danh sách, thống kê và bộ lọc năm/quốc gia/tìm kiếm, có phân quyền trên Profile.
 - [x] **Journey Flex MVP:** chọn/sắp xếp điểm đã đến, nối trên Mapbox, tùy chỉnh, preview và lưu nháp/công khai. Export và bài Feed được theo dõi riêng bên dưới.
 - [ ] **Journey Post:** chia sẻ bản đồ hành trình như một loại nội dung trên Feed.
-- [ ] Xuất ảnh hành trình; animated recap/video để giai đoạn mở rộng.
+- [x] **Xuất ảnh hành trình:** poster PNG 1:1/4:5, preview và tải về; [chi tiết](docs/phase-2-step-5.md).
+- [ ] Animated recap/video để giai đoạn mở rộng.
 
 > Đường kết nối điểm đến chỉ là hình biểu diễn thứ tự ghé thăm, **không phải** tuyến đường GPS thực tế nếu không có dữ liệu hành trình.
 
