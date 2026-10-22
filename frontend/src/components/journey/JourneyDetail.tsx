@@ -24,6 +24,7 @@ import {
 } from "@/components/location/visited/shared";
 import { JourneyEditor } from "./JourneyCollection";
 import { JourneyExportButton } from "./JourneyExportButton";
+import { JourneyShareButton } from "./JourneyShareButton";
 
 export function JourneyDetail({ id }: { id: string }) {
   const router = useRouter();
@@ -115,7 +116,8 @@ export function JourneyDetail({ id }: { id: string }) {
                 WanderMap Journey
               </p>
               {owner && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <JourneyShareButton journey={journey} onEdit={() => setEditing(true)} />
                   <JourneyExportButton
                     input={{ title: journey.title, points, style: journey.style_config }}
                     className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold backdrop-blur hover:bg-white/25"

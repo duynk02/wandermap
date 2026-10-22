@@ -3,6 +3,7 @@ import { ArrowLeft, Calendar, Star } from "lucide-react";
 import { LOCATION_CATEGORIES, ROUTES } from "@/constants";
 import { cn, formatDate, getAvatarUrl, timeAgo } from "@/lib/utils";
 import type { Post } from "@/types";
+import { JourneyPostCard } from "@/components/journey/JourneyPostCard";
 
 const VISIBILITY_LABEL: Record<string, string> = {
   followers: "Chỉ người theo dõi",
@@ -17,6 +18,12 @@ const VISIBILITY_LABEL: Record<string, string> = {
  * reject unless every host is listed in next.config.ts `remotePatterns`.
  */
 export function PostDetail({ post }: { post: Post }) {
+  if (post.post_type === "journey") return (
+    <div className="mx-auto max-w-2xl px-4 py-6">
+      <Link href={ROUTES.feed} className="mb-5 inline-flex min-h-11 items-center gap-2 text-sm text-ink-muted"><ArrowLeft className="h-4 w-4" />Về bảng tin</Link>
+      <JourneyPostCard post={post} />
+    </div>
+  );
   const images = post.images ?? [];
   const { author, location } = post;
   const icon = LOCATION_CATEGORIES.find((c) => c.value === location?.category)?.icon ?? "📍";

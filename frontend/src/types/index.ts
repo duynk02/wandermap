@@ -65,14 +65,11 @@ export interface Location {
   created_at: string;
 }
 
-export interface Post {
+interface PostBase {
   id: string;
   author_id: string;
-  location_id: string;
   content: string;
   images: string[];
-  rating: number; // 1-5
-  visited_at: string; // ISO date
   visibility: PostVisibility;
   likes_count: number;
   saves_count: number;
@@ -81,10 +78,31 @@ export interface Post {
   updated_at?: string;
   // Joined fields (when fetched with relations)
   author?: Profile & { is_following?: boolean };
-  location?: Location;
   is_liked?: boolean;
   is_saved?: boolean;
 }
+
+export interface LocationPost extends PostBase {
+  post_type?: "location"; // Older location-post responses remain supported.
+  location_id: string;
+  rating: number;
+  visited_at: string;
+  location?: Location;
+  journey_id?: null;
+}
+
+export interface JourneyPost extends PostBase {
+  post_type: "journey";
+  location_id: null;
+  rating: null;
+  visited_at: null;
+  location: null;
+  journey_id: string;
+  preview_revision: number;
+  journey: Pick<import("./journey").JourneySummary, "id" | "title" | "revision" | "status" | "visibility" | "stop_count" | "preview_names">;
+}
+
+export type Post = LocationPost | JourneyPost;
 
 export interface Itinerary {
   id: string;

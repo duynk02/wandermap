@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { getPostById } from "@/lib/api";
 import { PostDetail } from "@/components/post/PostDetail";
 import { PostDetailFallback } from "@/components/post/PostDetailFallback";
-import {PostCard} from "@/components/post/PostCard";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -22,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await loadPost(id);
   if (!post) return { title: "Bài đăng" }; // missing, or visible only to its author
 
-  const text = post.content.trim();
+  const text = post.content.trim() || (post.post_type === "journey" ? post.journey.title : "Bài đăng");
   return {
     title: text.length > 60 ? `${text.slice(0, 60)}…` : text,
     description: text.slice(0, 160),
@@ -34,5 +33,7 @@ export default async function PostPage({ params }: Props) {
   if (!UUID_RE.test(id)) notFound();
 
   const post = await loadPost(id);
+  // Journey actions must use the browser viewer's liked/saved state, including for public posts.
+  if (post?.post_type === "journey") return <PostDetailFallback id={id} allowAnonymous />;
   return post ? <PostDetail post={post} /> : <PostDetailFallback id={id} />;
 }

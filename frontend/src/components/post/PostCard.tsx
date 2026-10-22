@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { timeAgo, formatCount, getAvatarUrl, getPostImageUrl, cn } from "@/lib/utils";
 import { ROUTES, QUERY_KEYS } from "@/constants";
 import type { Post } from "@/types";
+import { JourneyPostCard } from "@/components/journey/JourneyPostCard";
 
 interface PostCardProps {
   post: Post;
@@ -25,6 +26,10 @@ const skipOptimizer = (src: string) =>
 
 
 export function PostCard({ post, compact = false }: PostCardProps) {
+  return post.post_type === "journey" ? <JourneyPostCard post={post} resolveViewer /> : <LocationPostCard post={post} compact={compact} />;
+}
+
+function LocationPostCard({ post, compact = false }: PostCardProps & { post: import("@/types").LocationPost }) {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
 

@@ -250,6 +250,7 @@ export function JourneyBuilder({
       await Promise.all([
         cache.invalidateQueries({ queryKey: QUERY_KEYS.journeys.all }),
         cache.invalidateQueries({ queryKey: QUERY_KEYS.travelMap.all }),
+        cache.invalidateQueries({ queryKey: QUERY_KEYS.posts.all }),
       ]);
       toast.success("Đã lưu hành trình của bạn");
       onClose();

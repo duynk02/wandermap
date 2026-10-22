@@ -7,6 +7,7 @@ import { AuthenticatedUser } from '../common/interfaces';
 import { CreatePostDto, UpdatePostDto } from './dto/create-post.dto';
 import { PostQueryDto } from './dto/post-query.dto';
 import { PostsService } from './posts.service';
+import { ShareJourneyDto } from './dto/share-journey.dto';
 
 @ApiTags('Posts')
 @Controller('posts')
@@ -41,6 +42,21 @@ export class PostsController {
     @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize = 12,
     @CurrentUser() user?: AuthenticatedUser,
   ) { return this.posts.byAuthor(username, page, pageSize, user?.sub); }
+
+  @Get('journey/:journeyId')
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  sharedJourney(@CurrentUser() user: AuthenticatedUser, @Param('journeyId', new ParseUUIDPipe()) id: string) {
+    return this.posts.sharedJourney(user.sub, id);
+  }
+
+  @Post('journey')
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Share an owned public, published Journey once; retries return the existing post' })
+  shareJourney(@CurrentUser() user: AuthenticatedUser, @Body() dto: ShareJourneyDto) {
+    return this.posts.shareJourney(user.sub, dto);
+  }
 
   @Post()
   @UseGuards(AccessTokenGuard)

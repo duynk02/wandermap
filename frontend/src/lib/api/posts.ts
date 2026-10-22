@@ -2,6 +2,22 @@ import { DEFAULT_PAGE_SIZE } from "@/constants";
 import type { FeedFilters, PaginatedResponse, Post } from "@/types";
 import type { CreatePostInput } from "@/lib/validations";
 import { ApiError, apiFetch } from "./client";
+import type { JourneyPost } from "@/types";
+
+export const getSharedJourneyPost = (journeyId: string) =>
+  apiFetch<{ post: JourneyPost | null }>(`/posts/journey/${encodeURIComponent(journeyId)}`).then((result) => result.post);
+
+export const shareJourney = (input: {
+  journey_id: string;
+  revision: number;
+  content: string;
+  preview_image_url: string;
+}) => apiFetch<{ post: JourneyPost; created: boolean }>("/posts/journey", { method: "POST", body: input });
+
+export const setPostSaved = (postId: string, saved: boolean) =>
+  apiFetch<{ saved: boolean; saves_count: number }>(`/posts/${encodeURIComponent(postId)}/save`, {
+    method: saved ? "POST" : "DELETE",
+  });
 
 export const getPostsByLocation = (locationId: string, page = 1) =>
   apiFetch<PaginatedResponse<Post>>(`/posts/by-location/${encodeURIComponent(locationId)}`, {

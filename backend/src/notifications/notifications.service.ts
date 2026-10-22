@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { NotificationQueryDto } from './dto/notification-query.dto';
+import { postAccess } from '../posts/post-access';
 
 export type NotificationType = 'follow' | 'like' | 'comment';
 
@@ -37,6 +38,7 @@ export interface NotificationPage {
 
 // likes and comments on the same post collapse into one item; every follow stays its own item.
 const GROUP_KEY = `CASE WHEN n.type = 'follow' THEN n.id::text ELSE n.type || ':' || n.post_id::text END`;
+const EVENT_ACCESS = `(n.post_id IS NULL OR EXISTS (SELECT 1 FROM posts p WHERE p.id = n.post_id AND ${postAccess()}))`;
 
 @Injectable()
 export class NotificationsService {
@@ -50,7 +52,7 @@ export class NotificationsService {
       this.db.query<NotificationItem>(
         `WITH events AS (
            SELECT n.actor_id, n.type, n.post_id, n.read_at, n.created_at, ${GROUP_KEY} AS group_key
-           FROM notifications n WHERE n.recipient_id = $1
+           FROM notifications n WHERE n.recipient_id = $1 AND ${EVENT_ACCESS}
          ), groups AS (
            SELECT group_key, type, post_id,
                   COUNT(DISTINCT actor_id)::int AS actor_count,
@@ -75,7 +77,7 @@ export class NotificationsService {
         [userId, pageSize, (page - 1) * pageSize],
       ),
       this.db.query<{ count: string }>(
-        `SELECT COUNT(*)::text AS count FROM (SELECT 1 FROM notifications n WHERE n.recipient_id = $1 GROUP BY ${GROUP_KEY}) t`,
+        `SELECT COUNT(*)::text AS count FROM (SELECT 1 FROM notifications n WHERE n.recipient_id = $1 AND ${EVENT_ACCESS} GROUP BY ${GROUP_KEY}) t`,
         [userId],
       ),
     ]);
@@ -87,7 +89,7 @@ export class NotificationsService {
   /** Number of unread interactions: every new like, comment or follow adds one. */
   async unreadCount(userId: string): Promise<{ count: number }> {
     const result = await this.db.query<{ count: number }>(
-      'SELECT COUNT(*)::int AS count FROM notifications WHERE recipient_id = $1 AND read_at IS NULL',
+      `SELECT COUNT(*)::int AS count FROM notifications n WHERE n.recipient_id = $1 AND n.read_at IS NULL AND ${EVENT_ACCESS}`,
       [userId],
     );
     return { count: result.rows[0]?.count ?? 0 };

@@ -92,6 +92,8 @@ Không đồng nhất Journey với itinerary. Có thể thêm source_itinerary_
 
 ## 4. Posts/Journeys: quyết định cho Step 6
 
+**Đã triển khai tiếp:** migration 009, share API, Journey Post Card và kiểm thử được mô tả trong [Step 6 — Share Journey to Feed](phase-2-step-6.md). Phần dưới ghi lại quyết định ở Step 1.
+
 | Lựa chọn | Đánh giá |
 | --- | --- |
 | Thêm post_type/journey_id vào posts | Tái sử dụng like/comment/save/counters; cần thay post shape có kiểm soát. **Hướng dự kiến cho Step 6.** |

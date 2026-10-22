@@ -141,6 +141,7 @@ export function JourneyCollection({
       await Promise.all([
         cache.invalidateQueries({ queryKey: QUERY_KEYS.journeys.all }),
         cache.invalidateQueries({ queryKey: QUERY_KEYS.travelMap.all }),
+        cache.invalidateQueries({ queryKey: QUERY_KEYS.posts.all }),
       ]);
       toast.success("Đã xóa hành trình");
     },

@@ -1,5 +1,7 @@
 # Phase 2 — Step 5: Export Journey Image
 
+Phần chia sẻ lên Feed đã triển khai tiếp ở [Step 6](phase-2-step-6.md). Luồng xuất PNG dưới đây vẫn độc lập với đăng bài.
+
 Vị trí trong kế hoạch: Phase 1 đã được người dùng xác nhận hoàn tất; Phase 2 đã có dữ liệu Visited Locations, My Travel Map và Journey Flex MVP. Bước này chỉ xuất ảnh. Chia sẻ Journey lên Feed là Step 6 riêng, thực hiện sau khi hoàn tất export.
 
 ## Trải nghiệm

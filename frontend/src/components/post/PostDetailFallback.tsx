@@ -12,17 +12,17 @@ import { PostDetail } from "./PostDetail";
  * are `followers` / `private` come back 404 there. This retries as the signed-in user once the
  * session has been restored, so authors can open their own non-public posts.
  */
-export function PostDetailFallback({ id }: { id: string }) {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+export function PostDetailFallback({ id, allowAnonymous = false }: { id: string; allowAnonymous?: boolean }) {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const { data: post, isLoading } = useQuery({
-    queryKey: [...QUERY_KEYS.posts.byId(id), "viewer"],
+    queryKey: [...QUERY_KEYS.posts.byId(id), user?.id ?? "guest"],
     queryFn: () => getPostById(id),
-    enabled: !authLoading && isAuthenticated,
+    enabled: !authLoading && (isAuthenticated || allowAnonymous),
     retry: false,
   });
 
-  if (authLoading || (isAuthenticated && isLoading)) {
+  if (authLoading || ((isAuthenticated || allowAnonymous) && isLoading)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-surface">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />

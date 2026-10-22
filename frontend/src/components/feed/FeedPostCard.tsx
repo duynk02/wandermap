@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Heart, MapPin, MessageCircle, Star } from "lucide-react";
+import { Bookmark, Heart, MapPin, MessageCircle, Star } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { setPostLiked } from "@/lib/api";
+import { setPostLiked, setPostSaved } from "@/lib/api";
+import { JourneyPostContent } from "@/components/journey/JourneyPostContent";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { CommentSection } from "@/components/comment/CommentSection";
 import { FollowButton, FollowedBadge } from "@/components/post/FollowButton";
@@ -60,6 +61,17 @@ export function FeedPostCard({ post }: { post: Post }) {
     const [likesCount, setLikesCount] = useState(post.likes_count);
     const [commentsOpen, setCommentsOpen] = useState(false);
     const [commentsCount, setCommentsCount] = useState(post.comments_count ?? 0);
+    const [saved, setSaved] = useState(post.is_saved ?? false);
+    const [savesCount, setSavesCount] = useState(post.saves_count);
+    const saveMutation = useMutation({
+        mutationFn: (next: boolean) => setPostSaved(post.id, next),
+        onSuccess: (result) => {
+            setSaved(result.saved);
+            setSavesCount(result.saves_count);
+            void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.byId(post.id) });
+        },
+        onError: () => toast.error("Không thể cập nhật bài đã lưu"),
+    });
 
     // Same behaviour as PostCard: optimistic, rolled back on failure, then the API's counter wins.
     const likeMutation = useMutation({
@@ -130,7 +142,7 @@ export function FeedPostCard({ post }: { post: Post }) {
             )}
 
             {/* Place + rating */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-3">
+            {post.post_type !== "journey" && <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pt-3">
                 {post.location && (
                     <Link
                         href={ROUTES.location(post.location.id)}
@@ -148,11 +160,11 @@ export function FeedPostCard({ post }: { post: Post }) {
                         />
                     ))}
                 </span>
-            </div>
+            </div>}
 
             <p className="whitespace-pre-wrap break-words px-4 pt-2 text-sm text-ink">{post.content}</p>
 
-            {post.images?.length > 0 && (
+            {post.post_type === "journey" ? <JourneyPostContent post={post} /> : post.images?.length > 0 && (
                 <div className="mt-3">
                     <PostImages images={post.images} postId={post.id} />
                 </div>
@@ -187,7 +199,10 @@ export function FeedPostCard({ post }: { post: Post }) {
                     {formatCount(commentsCount)}
                 </button>
 
-                <Link href={ROUTES.post(post.id)} className="ml-auto text-sm font-medium text-brand-500 hover:text-brand-600">
+                <button type="button" aria-label={saved ? "Bỏ lưu bài đăng" : "Lưu bài đăng"} aria-pressed={saved} disabled={saveMutation.isPending} onClick={() => { if (requireAuth("Đăng nhập để lưu bài đăng")) saveMutation.mutate(!saved); }} className="flex min-h-11 items-center gap-1.5 text-sm text-ink-muted hover:text-brand-500">
+                    <Bookmark className={cn("h-5 w-5", saved && "fill-brand-500 text-brand-500")} />{formatCount(savesCount)}
+                </button>
+                <Link href={ROUTES.post(post.id)} className="ml-auto text-xs font-medium text-brand-500 hover:text-brand-600">
                     Xem chi tiết
                 </Link>
             </div>
