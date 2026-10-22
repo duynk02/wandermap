@@ -1,5 +1,6 @@
 import type { Map as MapboxMap, MapboxErrorEvent } from "mapbox-gl";
 import { journeyRoute, travelBounds, travelFeatures } from "../mapbox/travel";
+import { installArchipelagoLabels } from "../mapbox/archipelagos";
 import {
   journeyPeriod,
   posterDimensions,
@@ -352,6 +353,7 @@ export async function renderJourneyPoster(
       const load = () => {
         try {
           installJourney(exportMap, input, dpr);
+          installArchipelagoLabels(exportMap, dpr);
           installed = true;
         } catch {
           fail(

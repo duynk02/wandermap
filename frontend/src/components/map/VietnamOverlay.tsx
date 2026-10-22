@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Layer, Source, useMap as useReactMapGl } from "react-map-gl";
 import type { Map as MapboxMap } from "mapbox-gl";
+import { ArchipelagoOverlay } from "./ArchipelagoOverlay";
 
 const VN_RED = "#da251d";
 
@@ -16,47 +17,6 @@ const ISO = ["get", "iso_3166_1"];
 const WORLDVIEW = ["any", ["==", ["get", "worldview"], "all"], ["in", "US", ["get", "worldview"]]];
 const IS_VIETNAM = ["all", ["==", ISO, "VN"], WORLDVIEW];
 const IS_OTHER_COUNTRY = ["all", ["!=", ISO, "VN"], WORLDVIEW];
-
-/**
- * Archipelagos labelled by the Vietnamese sovereignty claim. Positions are the approximate
- * centre of each group, so the label sits over the group, not on a single island.
- */
-const ARCHIPELAGOS: GeoJSON.FeatureCollection<GeoJSON.Point, { label: string }> = {
-  type: "FeatureCollection",
-  features: [
-    {
-      type: "Feature",
-      properties: { label: "Quần đảo Hoàng Sa\n(Việt Nam)" },
-      geometry: { type: "Point", coordinates: [112.0, 16.5] },
-    },
-    {
-      type: "Feature",
-      properties: { label: "Quần đảo Trường Sa\n(Việt Nam)" },
-      geometry: { type: "Point", coordinates: [114.0, 10.0] },
-    },
-  ],
-};
-
-/**
- * English names the base style uses for these groups. Matching is on `name_en`, so it works
- * whatever language the map is rendered in. Extend the list if a label still shows up.
- */
-const HIDDEN_BASE_LABELS = ["Paracel Islands", "Spratly Islands", "Xisha Islands", "Nansha Islands"];
-
-type Filter = Parameters<MapboxMap["setFilter"]>[1];
-
-/** Hides the base style's own labels for those groups so ours are the only ones. Idempotent. */
-function hideBaseLabels(map: MapboxMap, names: string[]) {
-  for (const layer of map.getStyle()?.layers ?? []) {
-    if (layer.type !== "symbol" || !("source-layer" in layer) || !layer["source-layer"]) continue;
-
-    const current = map.getFilter(layer.id);
-    if (current && JSON.stringify(current).includes(names[0])) continue; // already patched
-
-    const notHidden = ["!", ["in", ["get", "name_en"], ["literal", names]]];
-    map.setFilter(layer.id, (current ? ["all", current, notHidden] : notHidden) as Filter);
-  }
-}
 
 /** Inserting below the first label layer keeps road/place names readable above our fills. */
 function firstSymbolLayerId(map: MapboxMap): string | undefined {
@@ -78,9 +38,8 @@ export function VietnamOverlay() {
 
     const setup = () => {
       setBeforeId(firstSymbolLayerId(map) ?? "");
-      hideBaseLabels(map, HIDDEN_BASE_LABELS);
     };
-    // Reapply label filters and layer placement when the UI switches map styles.
+    // Keep country fills below basemap labels when the UI switches map styles.
     map.on("style.load", setup);
     if (map.isStyleLoaded()) setup();
 
@@ -131,21 +90,7 @@ export function VietnamOverlay() {
         />
       </Source>
 
-      <Source id="vn-archipelagos" type="geojson" data={ARCHIPELAGOS}>
-        <Layer
-          id="vn-archipelago-labels"
-          type="symbol"
-          minzoom={4}
-          layout={{
-            "text-field": ["get", "label"],
-            "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
-            "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 8, 14],
-            "text-allow-overlap": true,
-            "text-ignore-placement": true,
-          }}
-          paint={{ "text-color": VN_RED, "text-halo-color": "#ffffff", "text-halo-width": 1.6 }}
-        />
-      </Source>
+      <ArchipelagoOverlay />
     </>
   );
 }

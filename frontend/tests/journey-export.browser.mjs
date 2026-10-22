@@ -76,8 +76,8 @@ let fixture = {
   author: profileData,
   style_config: style,
   stops: [
-    ["Đà Lạt", 108.458, 11.94],
-    ["Nha Trang", 109.196, 12.238],
+    ["Hà Nội", 105.8412, 21.0285],
+    ["Phú Quốc", 103.98, 10.22],
     ["Đà Nẵng", 108.202, 16.054],
   ].map(([name, lng, lat], i) => ({
     id: `stop-${i}`,
@@ -95,6 +95,7 @@ let fixture = {
   })),
 };
 let socket, send, evaluate;
+const vietnamStops = fixture.stops;
 let blockMapbox = false;
 const mutations = [],
   exceptions = [],
@@ -123,6 +124,11 @@ try {
   });
   let sequence = 0;
   const pending = new Map();
+  const interceptionError = (cause) => {
+    // Removing/replacing a map cancels in-flight requests before CDP can answer them.
+    if (cause.message !== "Invalid InterceptionId.")
+      exceptions.push(cause.message);
+  };
   send = (method, params = {}) =>
     new Promise((done, reject) => {
       const requestId = ++sequence;
@@ -144,7 +150,7 @@ try {
         void send(blockMapbox ? "Fetch.failRequest" : "Fetch.continueRequest", {
           requestId,
           ...(blockMapbox ? { errorReason: "Failed" } : {}),
-        });
+        }).catch(interceptionError);
       } else {
         if (
           !["GET", "HEAD"].includes(request.method) &&
@@ -157,11 +163,40 @@ try {
             ? { ...profileData, email: "export@example.test" }
             : path.includes("/journeys/")
               ? fixture
-              : path.endsWith("/visited-locations")
-                ? { data: [], count: 0, page: 1, pageSize: 20, hasMore: false }
-                : path.includes("unread")
-                  ? { count: 0 }
-                  : {};
+              : path.endsWith("/journeys")
+                ? { data: [], count: 0, page: 1, pageSize: 8, hasMore: false }
+                : path.endsWith("/travel-map")
+                  ? {
+                      points: vietnamStops.map((s) => ({
+                        id: s.id,
+                        location_id: s.location_id,
+                        name: s.location_name_snapshot,
+                        city: s.location.city,
+                        country: s.location.country,
+                        coordinates: s.location.coordinates,
+                        last_visited_at: s.visited_at_snapshot,
+                        visit_count: 1,
+                      })),
+                      statistics: {
+                        location_count: 3,
+                        visit_count: 3,
+                        journey_count: 0,
+                      },
+                      options: { years: [2026], countries: ["Việt Nam"] },
+                    }
+                  : path.endsWith("/locations/in-viewport")
+                    ? []
+                    : path.endsWith("/visited-locations")
+                      ? {
+                          data: [],
+                          count: 0,
+                          page: 1,
+                          pageSize: 20,
+                          hasMore: false,
+                        }
+                      : path.includes("unread")
+                        ? { count: 0 }
+                        : {};
         void send("Fetch.fulfillRequest", {
           requestId,
           responseCode: 200,
@@ -169,7 +204,7 @@ try {
             { name: "Content-Type", value: "application/json" },
           ],
           body: Buffer.from(JSON.stringify(body)).toString("base64"),
-        });
+        }).catch(interceptionError);
       }
     }
     const waiting = pending.get(message.id);
@@ -222,6 +257,49 @@ try {
     const image = await send("Page.captureScreenshot", { format: "png" });
     await writeFile(join(artifacts, name), Buffer.from(image.data, "base64"));
   };
+  // Read react-map-gl's existing context; no production globals or debug endpoints.
+  const archipelagoState = (selector, frame = false) =>
+    evaluate(`(() => {
+    const element=document.querySelector(${JSON.stringify(selector)})?.querySelector('[mapboxgl-children]');
+    if(!element) return null;
+    let fiber=element[Object.keys(element).find(key=>key.startsWith('__reactFiber$'))];
+    while(fiber) {
+      const ref=fiber.memoizedProps?.value?.map;
+      if(ref?.getMap) {
+        const map=ref.getMap(); if(!map.isStyleLoaded()) return null;
+        if(${JSON.stringify(frame)}) map.jumpTo({center:[113,13.25],zoom:5});
+        const layer=map.getLayer('vn-archipelago-labels');
+        return { loaded:map.loaded() && !map.isMoving(),
+          labels:layer ? [...new Set(map.queryRenderedFeatures({layers:[layer.id]}).map(f=>f.properties.label))].sort() : [],
+          layers:(map.getStyle().layers??[]).filter(l=>l.id==='vn-archipelago-labels').length,
+          fading:!!map.getLayer('vn-others-fade'), sprite:JSON.stringify(map.getStyle().sprite) };
+      }
+      fiber=fiber.return;
+    }
+    return null;
+  })()`);
+  const assertArchipelagos = async (selector, expectedStyle, frame = false) => {
+    let state;
+    if (frame)
+      await until(
+        async () => !!(await archipelagoState(selector, true)),
+        "frame archipelago region",
+      );
+    await until(async () => {
+      state = await archipelagoState(selector);
+      return (
+        state?.loaded &&
+        state.labels.length === 2 &&
+        (!expectedStyle || state.sprite.includes(expectedStyle))
+      );
+    }, "both rendered archipelago labels");
+    assert.deepEqual(state.labels, [
+      "Quần đảo Hoàng Sa\n(Việt Nam)",
+      "Quần đảo Trường Sa\n(Việt Nam)",
+    ]);
+    assert.equal(state.layers, 1, "No duplicate overlay after style reload");
+    return state;
+  };
   await send("Page.enable");
   await send("Runtime.enable");
   await send("Page.bringToFront");
@@ -258,6 +336,10 @@ try {
       ),
     "journey detail",
   );
+  assert.equal(
+    (await assertArchipelagos('[aria-label="Bản đồ hành trình"]')).fading,
+    false,
+  );
   await click('button[aria-label="Xuất ảnh hành trình"]');
   assert.deepEqual(await ready(), [1600, 1600]);
   await capture("desktop-square.png");
@@ -281,6 +363,32 @@ try {
   assert.ok(
     stats.channels[0].stdev > 12,
     "Map pixels must contain real rendered data",
+  );
+  const { data: mapPixels, info: mapInfo } = await sharp(png)
+    .extract({ left: 800, top: 352, width: 700, height: 900 })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let northRed = 0,
+    southRed = 0;
+  for (let y = 0; y < mapInfo.height; y++)
+    for (let x = 0; x < mapInfo.width; x++) {
+      const offset = (y * mapInfo.width + x) * mapInfo.channels;
+      if (
+        mapPixels[offset] > 160 &&
+        mapPixels[offset + 1] < 85 &&
+        mapPixels[offset + 2] < 85
+      ) {
+        if (y < 450) northRed++;
+        else southRed++;
+      }
+    }
+  assert.ok(
+    northRed > 30 && southRed > 30,
+    `PNG must capture red archipelago labels in both map regions (${northRed}/${southRed})`,
+  );
+  checks.push(
+    "Journey detail and exported PNG include both archipelago labels as WebGL layers",
   );
   checks.push(
     "Real Mapbox/WebGL square poster, PNG file, nonblank map, inaccessible cover excluded",
@@ -351,6 +459,30 @@ try {
   await until(
     () => evaluate(`!!document.querySelector('input[name="title"]')`),
     "builder",
+  );
+  await assertArchipelagos(
+    '[role="dialog"] [aria-label="Bản đồ hành trình"]',
+    "outdoors-v12",
+    true,
+  );
+  await evaluate(
+    `(() => { const el=document.querySelector('select[name="style_config.map_style"]');el.value='dark-v11';el.dispatchEvent(new Event('change',{bubbles:true})); })()`,
+  );
+  await assertArchipelagos(
+    '[role="dialog"] [aria-label="Bản đồ hành trình"]',
+    "dark-v11",
+    true,
+  );
+  await evaluate(
+    `(() => { const el=document.querySelector('select[name="style_config.map_style"]');el.value='outdoors-v12';el.dispatchEvent(new Event('change',{bubbles:true})); })()`,
+  );
+  await assertArchipelagos(
+    '[role="dialog"] [aria-label="Bản đồ hành trình"]',
+    "outdoors-v12",
+    true,
+  );
+  checks.push(
+    "Builder preserves a single pair of labels when switching light/dark map styles",
   );
   await evaluate(
     `(()=>{const el=document.querySelector('input[name="title"]');el.focus();el.select()})()`,
@@ -471,6 +603,45 @@ try {
   );
   checks.push(
     "Cancel while fonts load cleans up without stale previews or hidden map containers",
+  );
+  await send("Emulation.setDeviceMetricsOverride", {
+    width: 1440,
+    height: 1100,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await send("Page.navigate", { url: `${web}/explore` });
+  const exploreOverlay = await assertArchipelagos("main");
+  assert.equal(
+    exploreOverlay.fading,
+    true,
+    "Explore retains its existing country highlight",
+  );
+  await capture("explore-archipelagos.png");
+  checks.push(
+    "Explore keeps the same labels and its original country highlight",
+  );
+  const publicFeed = await (
+    await fetch(`${web}/api/v1/posts/feed?pageSize=1`)
+  ).json();
+  const username =
+    process.env.WANDERMAP_TEST_USERNAME ??
+    publicFeed.data?.[0]?.author?.username;
+  assert.ok(
+    username,
+    "Supply an existing public profile via WANDERMAP_TEST_USERNAME when the local feed is empty",
+  );
+  await send("Page.navigate", {
+    url: `${web}/profile/${encodeURIComponent(username)}?tab=map`,
+  });
+  await assertArchipelagos(
+    '[aria-label="Bản đồ các địa điểm đã đến"]',
+    undefined,
+    true,
+  );
+  await capture("personal-map-archipelagos.png");
+  checks.push(
+    "My Travel Map renders both shared labels without adding the Explore country fade",
   );
   assert.deepEqual(mutations, [], "Export must not save, upload or publish");
   assert.deepEqual(exceptions, [], "No uncaught exceptions");

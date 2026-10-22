@@ -29,6 +29,7 @@ import {
 import { DEFAULT_JOURNEY_STYLE } from "@/lib/validations/journey";
 import type { JourneyStyle, TravelMapPoint } from "@/types";
 import { formatTravelDate } from "@/components/location/visited/shared";
+import { ArchipelagoOverlay } from "./ArchipelagoOverlay";
 
 /** A separate map instance for personal maps and journeys; Explore's useMap stays unchanged. */
 export function TravelMap({
@@ -251,6 +252,7 @@ export function TravelMap({
               />
             )}
           </Source>
+          <ArchipelagoOverlay />
           {active && (
             <Popup
               className="travel-map-popup"
