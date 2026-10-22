@@ -15,6 +15,7 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  ChevronDown,
   Eye,
   GripVertical,
   ImagePlus,
@@ -550,23 +551,29 @@ export function JourneyBuilder({
                     </label>
                     <label className="block space-y-1 text-xs text-ink">
                       Kiểu đường
-                      <select
-                        {...register("style_config.line_style")}
-                        className={fieldClass}
-                      >
-                        <option value="solid">Nét liền</option>
-                        <option value="dashed">Nét đứt</option>
-                      </select>
+                      <span className="relative block">
+                        <select
+                          {...register("style_config.line_style")}
+                          className={`${fieldClass} appearance-none pr-10`}
+                        >
+                          <option value="solid">Nét liền</option>
+                          <option value="dashed">Nét đứt</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden />
+                      </span>
                     </label>
                     <label className="block space-y-1 text-xs text-ink">
                       Nền bản đồ
-                      <select
-                        {...register("style_config.map_style")}
-                        className={fieldClass}
-                      >
-                        <option value="outdoors-v12">Thiên nhiên</option>
-                        <option value="dark-v11">Đêm thành phố</option>
-                      </select>
+                      <span className="relative block">
+                        <select
+                          {...register("style_config.map_style")}
+                          className={`${fieldClass} appearance-none pr-10`}
+                        >
+                          <option value="outdoors-v12">Thiên nhiên</option>
+                          <option value="dark-v11">Đêm thành phố</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden />
+                      </span>
                     </label>
                     <label className="flex items-center gap-2 text-xs text-ink">
                       <input
@@ -660,10 +667,13 @@ export function JourneyBuilder({
                 </div>
                 <label className="block space-y-2 text-xs font-semibold text-ink">
                   Ai có thể xem?
-                  <select {...register("visibility")} className={fieldClass}>
-                    <option value="private">Chỉ mình tôi</option>
-                    <option value="public">Mọi người (khi công khai)</option>
-                  </select>
+                  <span className="relative block">
+                    <select {...register("visibility")} className={`${fieldClass} appearance-none pr-10`}>
+                      <option value="private">Chỉ mình tôi</option>
+                      <option value="public">Mọi người (khi công khai)</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden />
+                  </span>
                 </label>
               </motion.fieldset>
             )}
