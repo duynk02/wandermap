@@ -26,7 +26,7 @@ const skipOptimizer = (src: string) =>
 
 
 export function PostCard({ post, compact = false }: PostCardProps) {
-  return post.post_type === "journey" ? <JourneyPostCard post={post} resolveViewer /> : <LocationPostCard post={post} compact={compact} />;
+  return post.post_type === "journey" ? <JourneyPostCard post={post} resolveViewer variant="grid" /> : <LocationPostCard post={post} compact={compact} />;
 }
 
 function LocationPostCard({ post, compact = false }: PostCardProps & { post: import("@/types").LocationPost }) {
@@ -70,7 +70,7 @@ function LocationPostCard({ post, compact = false }: PostCardProps & { post: imp
       animate={{ opacity: 1, y: 0 }}
       className={cn(
         "group overflow-hidden rounded-2xl bg-surface-elevated transition-shadow hover:shadow-lg",
-        compact ? "flex gap-3" : ""
+        compact ? "flex gap-3" : "flex h-full min-w-0 flex-col"
       )}
     >
       {/* Image */}
@@ -98,57 +98,59 @@ function LocationPostCard({ post, compact = false }: PostCardProps & { post: imp
       )}
 
       {/* Content */}
-      <div className={cn("flex flex-col", compact ? "flex-1 min-w-0 py-1" : "p-4")}>
+      <div className={cn("flex flex-col", compact ? "flex-1 min-w-0 py-1" : "min-w-0 flex-1 p-4")}>
         {/* Author */}
         {post.author && (
-          <Link href={ROUTES.profile(post.author.username)} className="flex items-center gap-2 mb-2">
+          <Link href={ROUTES.profile(post.author.username)} className={cn("mb-2 flex min-w-0 items-center gap-2", !compact && "h-7")}>
             <Image
               src={getAvatarUrl(post.author.avatar_url, post.author.username)}
               alt={post.author.display_name}
               width={compact ? 20 : 28}
               height={compact ? 20 : 28}
-              className="rounded-full object-cover"
+              className="shrink-0 rounded-full object-cover"
               unoptimized={skipOptimizer(getAvatarUrl(post.author.avatar_url, post.author.username))}
             />
-            <span className={cn("font-medium text-ink hover:text-brand-500 transition-colors", compact ? "text-xs" : "text-sm")}>
+            <span className={cn("min-w-0 flex-1 truncate font-medium text-ink hover:text-brand-500 transition-colors", compact ? "text-xs" : "text-sm")}>
               {post.author.display_name}
             </span>
-            <span className="text-xs text-ink-subtle">{timeAgo(post.created_at)}</span>
+            <span className="shrink-0 text-[10px] text-ink-subtle">{timeAgo(post.created_at)}</span>
           </Link>
         )}
 
-        {/* Post text */}
-        <Link href={ROUTES.post(post.id)}>
-          <p className={cn(
-            "text-ink-muted",
-            compact ? "line-clamp-2 text-xs" : "line-clamp-3 text-sm"
-          )}>
-            {post.content}
-          </p>
-        </Link>
-
-        {/* Location tag */}
-        {post.location && !compact && (
-          <Link href={ROUTES.location(post.location.id)} className="mt-2 flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600">
-            <MapPin className="h-3 w-3" />
-            {post.location.name}
+        <div className={cn(!compact && "min-h-20")}>
+          {/* Post text */}
+          <Link href={ROUTES.post(post.id)}>
+            <p className={cn(
+              "text-ink-muted",
+              compact ? "line-clamp-2 text-xs" : "line-clamp-2 break-words text-sm"
+            )}>
+              {post.content}
+            </p>
           </Link>
-        )}
+
+          {/* Location tag */}
+          {post.location && !compact && (
+            <Link href={ROUTES.location(post.location.id)} className="mt-2 flex min-w-0 items-center gap-1 text-xs text-brand-500 hover:text-brand-600">
+              <MapPin className="h-3 w-3 shrink-0" />
+              <span className="truncate">{post.location.name}</span>
+            </Link>
+          )}
+        </div>
 
         {/* Actions */}
         {!compact && (
-          <div className="mt-3 flex items-center gap-4">
+          <div className="mt-auto flex min-h-9 items-center gap-4 pt-3">
             <motion.button
               whileTap={{ scale: 0.85 }}
               onClick={() => isAuthenticated && likeMutation.mutate(!optimisticLiked)}
-              className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-red-500 transition-colors"
+              className="flex min-h-9 items-center gap-1.5 text-xs text-ink-muted hover:text-red-500 transition-colors"
               disabled={!isAuthenticated || likeMutation.isPending}
             >
               <Heart className={cn("h-4 w-4", optimisticLiked && "fill-red-500 text-red-500")} />
               {formatCount(optimisticCount)}
             </motion.button>
 
-            <button className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-brand-500 transition-colors">
+            <button className="flex min-h-9 items-center gap-1.5 text-xs text-ink-muted hover:text-brand-500 transition-colors">
               <Bookmark className="h-4 w-4" />
               {formatCount(post.saves_count)}
             </button>

@@ -6,14 +6,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { getPostById } from "@/lib/api";
 import { QUERY_KEYS } from "@/constants";
 import type { JourneyPost } from "@/types";
+import { JourneyPostGridCard } from "./JourneyPostGridCard";
 
 /** Reuse author, caption, Like, Comment and Save for every surface showing a Journey post. */
 export function JourneyPostCard({
   post,
   resolveViewer = false,
+  variant = "feed",
 }: {
   post: JourneyPost;
   resolveViewer?: boolean;
+  variant?: "feed" | "grid";
 }) {
   const { user, isLoading } = useAuth();
   const viewer = user?.id ?? "guest";
@@ -37,10 +40,13 @@ export function JourneyPostCard({
       </button>
     );
   if (resolveViewer && !current.data) return null;
+  const visible = resolveViewer ? current.data! : post;
+  if (variant === "grid" && visible.post_type === "journey")
+    return <JourneyPostGridCard key={`${post.id}-${viewer}`} post={visible} />;
   return (
     <FeedPostCard
       key={`${post.id}-${viewer}`}
-      post={resolveViewer ? current.data! : post}
+      post={visible}
     />
   );
 }

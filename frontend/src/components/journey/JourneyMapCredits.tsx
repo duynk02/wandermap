@@ -1,8 +1,14 @@
 /** Linked attribution accompanies the static map as well as the credits baked into its pixels. */
-export function JourneyMapCredits() {
+export function JourneyMapCredits({ compact = false }: { compact?: boolean }) {
   return (
-    <p className="px-4 py-2 text-[10px] leading-relaxed text-ink-muted">
-      Bản đồ hành trình: ©{" "}
+    <p
+      className={
+        compact
+          ? "whitespace-nowrap text-[9px] leading-3 text-ink-muted"
+          : "px-4 py-2 text-[10px] leading-relaxed text-ink-muted"
+      }
+    >
+      {!compact && "Bản đồ hành trình: "}©{" "}
       <a
         href="https://www.mapbox.com/about/maps/"
         target="_blank"
@@ -27,7 +33,7 @@ export function JourneyMapCredits() {
         rel="noopener noreferrer"
         className="underline"
       >
-        Cải thiện bản đồ
+        {compact ? "Góp ý" : "Cải thiện bản đồ"}
       </a>
     </p>
   );

@@ -10,9 +10,15 @@
 - Không upload ảnh khi mở preview. Chỉ upload khi nhấn đăng, qua `/uploads/images` và API client hiện có. Retry tái sử dụng URL ảnh đã upload trong cùng preview. Đóng preview giải phóng map/object URLs; không đổi Journey.
 - Loading khóa nút đăng và đóng để ngăn gửi lặp ngoài ý muốn. Mất mạng/response giữ caption và ảnh. Trước khi upload/gửi lại, client kiểm tra bài đã có; backend vẫn là nơi quyết định quyền và chống trùng.
 - Preview giữ một revision đã lưu. Nếu server trả 409 vì Journey đã đổi, **Tải lại bản xem trước** lấy Journey mới, dựng lại ảnh và giữ caption; không tự ghi đè thay đổi của cửa sổ khác.
-- Feed, profile grid và post detail nhận biết `post_type`. `JourneyPostContent` hiển thị ảnh, tiêu đề, số điểm, tối đa ba tên điểm và **Xem hành trình** đến `/journey/[id]`, nơi có bản đồ tương tác và các điểm đến hiện hữu. Không tạo bản sao Journey.
-- `JourneyPostCard` tái sử dụng `FeedPostCard`: author, caption, Follow, Like, Comment, Save. Lightbox Radix hỗ trợ phóng ảnh, Escape/đóng và focus. Nhánh PostCard thường vẫn dùng giao diện cũ. Thêm nút Save có hoạt động vào hàng tương tác Feed dùng chung; không triển khai lại tab Đã lưu của Profile vốn đang là placeholder.
+- Feed, profile grid và post detail nhận biết `post_type`. Feed/post detail dùng `JourneyPostContent`, hiển thị ảnh, tiêu đề, số điểm, tối đa ba tên điểm và **Xem hành trình** đến `/journey/[id]`, nơi có bản đồ tương tác và các điểm đến hiện hữu. Không tạo bản sao Journey.
+- `JourneyPostCard` mặc định tái sử dụng `FeedPostCard`: author, caption, Follow, Like, Comment, Save. Lightbox Radix hỗ trợ phóng ảnh, Escape/đóng và focus. Riêng `PostCard` trong lưới dùng variant `grid` và `JourneyPostGridCard` gọn: ảnh 4:3 object-contain, badge số điểm, author dưới ảnh, tiêu đề một dòng, caption hai dòng, liên kết Journey nhỏ và hàng tương tác. Nhánh bài thường được căn chiều cao phần nội dung/footer tương ứng; không triển khai lại tab Đã lưu của Profile vốn đang là placeholder.
 - Post detail và Journey cards trong profile tải lại theo viewer sau phục hồi phiên đăng nhập, để `is_liked/is_saved` không lấy từ response SSR ẩn danh. Cache key tách người xem. Share/edit/delete Journey invalidate các query posts liên quan.
+
+## Card gọn trong lưới Profile
+
+Card Journey gọn giữ toàn bộ poster và attribution trong ảnh, không zoom/crop khi hover. Các liên kết Mapbox/OpenStreetMap/feedback được trình bày nhỏ trong vùng nội dung cố định. Nhấn ảnh/tiêu đề hoặc biểu tượng bình luận mở bài đăng; **Xem hành trình** mở trực tiếp Journey. Like/Save gọi API hiện hữu, không điều hướng; trạng thái được tải theo viewer và cache posts được invalidate sau tương tác. Chuyển private/đổi revision vẫn có chỉ báo gọn, API giữ nguyên quyền xem.
+
+Đã kiểm tra Chrome với lưới public thực tế gồm một Journey và hai bài địa điểm: cả ba card rộng 320px, cao 436px, khung ảnh cao 240px và footer thẳng hàng. Kiểm tra 390px/320px, dark theme, tên/caption dài, Like, Save lỗi rồi thử lại, liên kết điều hướng và Feed vẫn dùng bản đầy đủ. Các mutation trình duyệt trong lúc kiểm tra được chặn bằng fixtures, không sửa dữ liệu thật. Type-check, lint các file sửa và build frontend pass; thay đổi chỉ ở frontend, không thêm migration/env/dependency.
 
 ## Schema và lựa chọn
 
