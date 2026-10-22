@@ -6,6 +6,7 @@ import type {
   PaginatedResponse,
 } from "@/types";
 import { apiFetch, nullOn404 } from "./client";
+import type { PlaceSuggestion } from "./places";
 
 const wrapLng = (lng: number) => ((((lng + 180) % 360) + 360) % 360) - 180;
 const clampLat = (lat: number) => Math.max(-90, Math.min(90, lat));
@@ -72,3 +73,15 @@ export interface CreateLocationInput {
 /** Requires login. Creates the location, or returns the existing one with the same google_place_id. */
 export const createLocation = (input: CreateLocationInput) =>
   apiFetch<Location>("/locations", { method: "POST", body: input });
+
+/** Resolve an OSM result independently of posts; the provider key makes retries idempotent. */
+export const createLocationFromPlace = (place: PlaceSuggestion) =>
+  createLocation({
+    name: place.name.trim().slice(0, 200),
+    address: place.address.slice(0, 500),
+    coordinates: place.coordinates,
+    city: place.city?.slice(0, 100),
+    country: place.country?.slice(0, 100),
+    category: place.category,
+    google_place_id: place.key,
+  });

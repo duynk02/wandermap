@@ -5,6 +5,7 @@ import { ArrowUpRight, MapPin, PenLine, X } from "lucide-react";
 import { Marker } from "react-map-gl";
 import { useMapStore } from "@/stores/mapStore";
 import { postLocationHref } from "@/lib/post-location";
+import { SearchVisitedButton } from "./SearchVisitedButton";
 
 /** Pin dropped on the place chosen in the search box. Replaced by the next search; X removes it. */
 export function SearchPin() {
@@ -39,6 +40,12 @@ export function SearchPin() {
             <span className="flex-1">Viết bài về địa điểm này</span>
             <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden />
           </Link>
+          <div className="mt-2">
+            <SearchVisitedButton selection={pin.selection} />
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
+            Lưu vào bản đồ của bạn để tạo hành trình. Không cần ảnh hay bài đăng.
+          </p>
         </div>
         <MapPin className="h-9 w-9 fill-red-500 text-white drop-shadow-md" strokeWidth={1.5} />
       </div>

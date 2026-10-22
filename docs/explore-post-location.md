@@ -8,7 +8,7 @@ Trang viết bài có nút **Quay lại** cạnh tiêu đề để trở về tr
 - Địa điểm OpenStreetMap: URL dùng `place` chứa metadata tối thiểu đã giới hạn độ dài. Tên, tọa độ, loại, địa chỉ, thành phố, quốc gia và khóa OSM được giữ để dùng luồng tạo địa điểm hiện có.
 - Chưa đăng nhập: form chuyển đến đăng nhập với `next` giữ nguyên query. Tải lại hoặc mở liên kết trong tab mới cũng giữ địa điểm.
 - JSON, UUID, tọa độ hoặc category sai: hiển thị thông báo trong form để chọn lại. Địa điểm không còn tồn tại hoặc API lỗi cũng cho phép chọn địa điểm khác.
-- Không ghi dữ liệu khi tìm kiếm, chọn ghim hoặc mở form. Với kết quả ngoài WanderMap, chỉ gọi API tạo địa điểm khi gửi bài hợp lệ; API tiếp tục dùng khóa OSM để tránh trùng.
+- Không ghi dữ liệu khi tìm kiếm hoặc chọn ghim. Trong luồng viết bài, chỉ gọi API tạo địa điểm khi gửi bài hợp lệ; API tiếp tục dùng khóa OSM để tránh trùng. Thẻ ghim còn có luồng [đánh dấu đã đến độc lập với bài đăng](explore-visited.md).
 
 Không có API, dependency, migration hoặc biến môi trường mới. Authentication và validation backend tiếp tục được áp dụng qua API hiện có.
 

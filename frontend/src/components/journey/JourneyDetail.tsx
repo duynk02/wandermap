@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -15,6 +16,7 @@ import {
 import { getJourney } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { QUERY_KEYS, ROUTES } from "@/constants";
+import { canGoBackWithinApp } from "@/lib/navigation";
 import { TravelMap } from "@/components/map/TravelMap";
 import {
   formatTravelDate,
@@ -24,6 +26,7 @@ import { JourneyEditor } from "./JourneyCollection";
 import { JourneyExportButton } from "./JourneyExportButton";
 
 export function JourneyDetail({ id }: { id: string }) {
+  const router = useRouter();
   const { user, isLoading } = useAuth();
   const viewer = user?.id ?? "guest";
   const [editing, setEditing] = useState(false);
@@ -78,13 +81,17 @@ export function JourneyDetail({ id }: { id: string }) {
   const owner = user?.id === journey.user_id;
   return (
     <article className="mx-auto max-w-6xl px-4 py-6 md:py-10">
-      <Link
-        href={ROUTES.profile(journey.author.username)}
-        className="inline-flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-brand-600"
+      <button
+        type="button"
+        onClick={() => {
+          if (canGoBackWithinApp()) router.back();
+          else router.replace(`${ROUTES.profile(journey.author.username)}?tab=map`);
+        }}
+        className="inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-medium text-ink-muted hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       >
-        <ArrowLeft className="h-4 w-4" />
-        Bản đồ của {journey.author.display_name}
-      </Link>
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Quay lại
+      </button>
       <div className="mt-5 overflow-hidden rounded-3xl border border-border bg-surface">
         <header className="relative overflow-hidden bg-gradient-to-br from-brand-950 to-brand-700 p-6 text-white md:p-8">
           {journey.cover_image_url && (

@@ -53,14 +53,19 @@ const statusKey = (viewer: string, locationId: string) =>
 export function MarkVisitedButton({
   location,
   variant = "default",
+  openOnMount = false,
 }: {
   location: Place;
   variant?: "default" | "hero";
+  /** Used after an explicit action has resolved an external search result. */
+  openOnMount?: boolean;
 }) {
   const { user, isLoading } = useAuth();
   const requireAuth = useRequireAuth();
-  const [open, setOpen] = useState(false);
-  const [openedFor, setOpenedFor] = useState<string | null>(null);
+  const [open, setOpen] = useState(openOnMount);
+  const [openedFor, setOpenedFor] = useState<string | null>(
+    openOnMount ? user?.id ?? null : null,
+  );
   const triggerRef = useRef<HTMLButtonElement>(null);
   const viewer = user?.id ?? "guest";
   const status = useQuery({

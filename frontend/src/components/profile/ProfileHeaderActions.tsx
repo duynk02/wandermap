@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ArrowLeft, Settings, Link2, LogOut, Check } from "lucide-react";
+import { ArrowLeft, Settings, Link2, LogOut, Check, Newspaper, Compass } from "lucide-react";
 import { signOut, useAuth } from "@/hooks/useAuth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiError, followUser, unfollowUser } from "@/lib/api";
-import { QUERY_KEYS } from "@/constants";
+import { QUERY_KEYS, ROUTES } from "@/constants";
+import { canGoBackWithinApp } from "@/lib/navigation";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useFollowStore } from "@/stores/followStore";
 import { useAuthStore } from "@/stores/authStore";
@@ -16,7 +18,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { Profile } from "@/types";
 
 const buttonClass =
-  "flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white " +
+  "flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white " +
   "backdrop-blur transition hover:bg-white/20 focus-visible:outline-none " +
   "focus-visible:ring-2 focus-visible:ring-white/60";
 
@@ -28,15 +30,27 @@ export function BackButton() {
   const router = useRouter();
 
   const goBack = () => {
-    // Nếu mở trực tiếp trang này (không có lịch sử) thì về trang khám phá.
-    if (window.history.length > 1) router.back();
-    else router.push("/feed");
+    if (canGoBackWithinApp()) router.back();
+    else router.replace(ROUTES.feed);
   };
 
   return (
     <button type="button" onClick={goBack} className={buttonClass} aria-label="Quay lại">
       <ArrowLeft className="h-5 w-5" />
     </button>
+  );
+}
+
+export function ProfileNavigation() {
+  return (
+    <nav aria-label="Điều hướng hồ sơ" className="flex items-center gap-1">
+      <Link href={ROUTES.feed} aria-label="Bản tin" title="Bản tin" className={buttonClass}>
+        <Newspaper className="h-5 w-5" aria-hidden />
+      </Link>
+      <Link href={ROUTES.explore} aria-label="Khám phá" title="Khám phá" className={buttonClass}>
+        <Compass className="h-5 w-5" aria-hidden />
+      </Link>
+    </nav>
   );
 }
 

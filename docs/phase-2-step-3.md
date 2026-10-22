@@ -17,6 +17,8 @@ Mở **Profile → Bản đồ**:
 
 Popup có nút đóng 44 × 44 px, padding 16 px, bo góc và màu theo theme; hỗ trợ Escape và trả focus về map. Nút **Quay lại** trên trang địa điểm trở về trang trước trong WanderMap, giữ tab Bản đồ của Profile qua `?tab=map`, kể cả sau reload/back/forward. Mở link trực tiếp hoặc từ bên ngoài dùng Khám phá làm dự phòng. Chuyển tab thay history entry hiện tại, không thêm một bước quay lại; navigation metadata giữ nguyên state của Next và phân biệt push/replace.
 
+Header Profile có hai biểu tượng **Bản tin** và **Khám phá** để điều hướng trực tiếp, kèm nhãn trợ năng/tooltip và vùng bấm 44px. Nút **Quay lại** trên trang Journey dùng lịch sử trong ứng dụng, không push thêm một Profile mới. Khi mở Journey trực tiếp, nút này replace sang Profile của tác giả với `?tab=map`; nút quay lại trên Profile không có lịch sử ứng dụng sẽ replace về Feed. Luồng Profile → Journey → quay lại Profile → quay lại trang trước tránh vòng lặp; browser back/forward và tab Bản đồ được giữ.
+
 **Tạo hành trình** mở builder:
 
 1. Chọn các địa điểm đã đánh dấu. Tìm kiếm/phân trang trong chính danh sách của mình, tối đa 100 điểm, mỗi địa điểm chỉ một lần.
@@ -105,6 +107,8 @@ Browser suite cần Node 22+, Chrome và Mapbox token hợp lệ. Có thể đ�
 Đã xác minh: backend type-check/build; 41 unit tests; 1 health e2e (mock DB); 34 SQL/HTTP tests với PostGIS thật (bao gồm regression Step 2); 16 Node tests frontend; production build frontend và browser flow. Browser kiểm tra lỗi mạng, revision, riêng tư, desktop/mobile/dark. Lint backend hiện bị chặn bởi 6 unused imports đã có trong auth.controller.ts; build frontend còn warnings cũ ngoài phạm vi.
 
 Smoke hiệu năng local: 1.001 điểm cá nhân khoảng 259 KB, HTTP khoảng 45 ms trong lượt đo; danh sách 20 dòng. Đây là mẫu thử trên database tạm, chưa phải benchmark production hay xác nhận tải đồng thời lớn. Map dùng native clustering/layers, không tạo DOM marker cho từng địa điểm.
+
+Kiểm tra bổ sung điều hướng Profile/Journey: `node tests/profile-navigation.browser.mjs` với `WANDERMAP_TEST_WEB_URL` và `WANDERMAP_TEST_API_URL` local (có thể đặt `WANDERMAP_TEST_USERNAME` nếu feed trống). Suite đọc một hồ sơ public để server render; API browser dùng fixtures và chặn mọi mutation, không ghi database. Đã pass 4 nhóm: Feed → Profile/map → Journey → reload → quay lại Profile/map → Feed; browser forward và nút Khám phá; header chủ tài khoản ở 320px/dark, vùng bấm 44px và Enter tới Feed; mở Journey trực tiếp rồi quay lại không tạo vòng lặp. Frontend type-check, 27 Node tests và production build trên bản sao nguồn tạm đều pass; lint còn warnings cũ. Chưa kiểm tra Safari/Firefox hoặc thiết bị mobile thật cho thay đổi điều hướng này.
 
 ## Chọn giao diện sáng/tối
 

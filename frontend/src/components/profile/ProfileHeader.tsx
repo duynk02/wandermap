@@ -10,6 +10,7 @@ import { getAvatarUrl } from "@/lib/utils";
 import type { Profile } from "@/types";
 import {
   BackButton,
+  ProfileNavigation,
   ProfileFollowButton,
   SettingsMenu,
 } from "./ProfileHeaderActions";
@@ -54,6 +55,7 @@ export function ProfileHeader({ profile }: ProfileHeaderProps) {
         <div className="flex items-center justify-between pt-4">
           <BackButton />
           <div className="flex items-center gap-2">
+            <ProfileNavigation />
             <ThemeSelector className="bg-white/10 text-white backdrop-blur hover:bg-white/20 hover:text-white focus-visible:ring-white/60 data-[state=open]:bg-white/20" />
             <SettingsMenu profileId={profile.id} />
           </div>
