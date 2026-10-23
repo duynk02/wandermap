@@ -5,6 +5,7 @@ import { AccessTokenGuard } from '../common/guards/access-token.guard';
 import { OptionalAccessTokenGuard } from '../common/guards/optional-access-token.guard';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { AccessTokenService } from './access-token.service';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { AuthService } from './auth.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AccessTokenGuard, OptionalAccessTokenGuard],
-  exports: [AuthService, AccessTokenGuard, OptionalAccessTokenGuard, JwtModule],
+  providers: [AuthService, AccessTokenService, AccessTokenGuard, OptionalAccessTokenGuard],
+  exports: [AuthService, AccessTokenService, AccessTokenGuard, OptionalAccessTokenGuard, JwtModule],
 })
 export class AuthModule {}

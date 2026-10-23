@@ -1,11 +1,8 @@
-import { Body, Controller, ForbiddenException, Get, HttpCode, HttpStatus, Post, Req, Res, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, ForbiddenException, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
-import { AccessTokenGuard } from '../common/guards/access-token.guard';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AuthenticatedUser } from '../common/interfaces';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';

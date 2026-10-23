@@ -10,10 +10,12 @@ import { randomUUID } from 'node:crypto';
 import { AppModule } from './app.module';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 import {UploadsService} from './uploads/uploads.service';
+import { RealtimeIoAdapter } from './realtime/realtime-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true});
   const config = app.get(ConfigService);
+  app.useWebSocketAdapter(new RealtimeIoAdapter(app, config));
   app.enableShutdownHooks();
   const origins = config.get<string>('CORS_ORIGINS', 'http://localhost:3000')
     .split(',').map((origin) => origin.trim()).filter(Boolean);
