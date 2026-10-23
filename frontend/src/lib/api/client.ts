@@ -3,7 +3,7 @@
  *
  * Auth model (matches the backend):
  *  - Access token (JWT, ~15 min) lives ONLY in memory here. It is never written to
- *    localStorage, so an XSS bug cannot exfiltrate it.
+ *    localStorage or any other persistent browser storage.
  *  - Refresh token is an HttpOnly cookie managed entirely by the API. On a 401 we call
  *    POST /auth/refresh once and retry the original request.
  *
@@ -35,11 +35,31 @@ export function apiBaseUrl(): string {
 // ── Access token (memory only) ───────────────────────────────────────────────
 let accessToken: string | null = null;
 let onSessionExpired: (() => void) | null = null;
+let credentialVersion = 0;
+let sessionVersion = 0;
+let authTransitionDepth = 0;
+let authTransitionTail: Promise<void> = Promise.resolve();
+const tokenListeners = new Set<(token: string | null) => void>();
 
 export const getAccessToken = () => accessToken;
-export const setAccessToken = (token: string | null) => {
+/** Changes even when a replacement JWT has identical bytes (for example, a rapid login). */
+export const getAccessTokenVersion = () => credentialVersion;
+/** Stable across normal access-token refreshes; changes at login/logout/session replacement. */
+export const getAuthSessionVersion = () => sessionVersion;
+function publishAccessToken(token: string | null) {
+  credentialVersion += 1;
   accessToken = token;
+  tokenListeners.forEach((listener) => listener(token));
+}
+export const setAccessToken = (token: string | null) => {
+  sessionVersion += 1;
+  publishAccessToken(token);
 };
+/** Realtime uses the same in-memory credentials as REST, including logout/token rotation. */
+export function subscribeAccessToken(listener: (token: string | null) => void): () => void {
+  tokenListeners.add(listener);
+  return () => { tokenListeners.delete(listener); };
+}
 /** Called when a refresh fails with 401 (session really ended). */
 export const setSessionExpiredHandler = (handler: (() => void) | null) => {
   onSessionExpired = handler;
@@ -52,7 +72,9 @@ export const setSessionExpiredHandler = (handler: (() => void) | null) => {
  */
 let refreshInFlight: Promise<string | null> | null = null;
 export function refreshAccessToken(): Promise<string | null> {
+  if (authTransitionDepth) return Promise.resolve(null);
   if (!refreshInFlight) {
+    const startedVersion = credentialVersion;
     refreshInFlight = (async () => {
       try {
         const res = await fetch(`${apiBaseUrl()}/auth/refresh`, {
@@ -60,11 +82,18 @@ export function refreshAccessToken(): Promise<string | null> {
           credentials: "include",
         });
         if (res.status === 401) {
-          accessToken = null;
+          if (startedVersion === credentialVersion) {
+            setAccessToken(null);
+            onSessionExpired?.();
+          }
           return null;
         }
         if (!res.ok) throw await toApiError(res);
-        accessToken = ((await res.json()) as { accessToken: string }).accessToken;
+        const refreshedToken = ((await res.json()) as { accessToken: string }).accessToken;
+        // A pending refresh belongs to the credentials it started with. It must never
+        // restore a logged-out session or replace a newly signed-in account's token.
+        if (startedVersion !== credentialVersion) return null;
+        publishAccessToken(refreshedToken);
         return accessToken;
       } finally {
         refreshInFlight = null;
@@ -72,6 +101,40 @@ export function refreshAccessToken(): Promise<string | null> {
     })();
   }
   return refreshInFlight;
+}
+
+/** Finish cookie rotation before logout revokes the resulting refresh session. */
+export async function settleAccessTokenRefresh(): Promise<void> {
+  try {
+    await refreshInFlight;
+  } catch {
+    // Logout still needs to be sent when a refresh failed due to a network/server error.
+  }
+}
+
+/** Serialize HttpOnly cookie writes and invalidate old requests before switching accounts. */
+export function runAuthTransition<T>(operation: (commitToken: (token: string) => void) => Promise<T>): Promise<T> {
+  authTransitionDepth += 1;
+  setAccessToken(null);
+  const startedSession = sessionVersion;
+  const previous = authTransitionTail;
+  let release!: () => void;
+  authTransitionTail = new Promise<void>((resolve) => { release = resolve; });
+  const assertCurrent = () => {
+    if (startedSession !== sessionVersion) throw new ApiError(401, "AUTH_SESSION_CHANGED", "Phiên đăng nhập đã thay đổi.");
+  };
+  return (async () => {
+    try {
+      await previous;
+      await settleAccessTokenRefresh();
+      const result = await operation((token) => { assertCurrent(); publishAccessToken(token); });
+      assertCurrent();
+      return result;
+    } finally {
+      authTransitionDepth -= 1;
+      release();
+    }
+  })();
 }
 
 // ── Requests ─────────────────────────────────────────────────────────────────
@@ -115,6 +178,8 @@ async function toApiError(res: Response): Promise<ApiError> {
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, query, retryOnUnauthorized = true, signal } = options;
+  const requestCredentialVersion = credentialVersion;
+  const requestSessionVersion = sessionVersion;
 
   // FormData (file uploads): let the browser set the multipart Content-Type with its boundary.
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
@@ -135,10 +200,14 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   let res = await send();
 
-  if (res.status === 401 && retryOnUnauthorized && !isServer()) {
-    const token = await refreshAccessToken();
-    if (token) res = await send();
-    else onSessionExpired?.();
+  if (res.status === 401 && retryOnUnauthorized && !isServer() && !authTransitionDepth && requestSessionVersion === sessionVersion) {
+    // Another request/socket may already have refreshed this same session while
+    // this 401 was in transit. Reuse that token rather than rotating again.
+    const token = requestCredentialVersion !== credentialVersion && accessToken
+      ? accessToken : await refreshAccessToken();
+    // The request belongs to its original session. A logout/account switch while it
+    // was pending must not trigger rotation or replay it under the next account.
+    if (token && token === accessToken && !authTransitionDepth && requestSessionVersion === sessionVersion) res = await send();
   }
 
   if (!res.ok) throw await toApiError(res);

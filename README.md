@@ -328,7 +328,7 @@ Roadmap là **kế hoạch**, không phải các tính năng được xác nhậ
 
 ### Phase 3 — Realtime Notifications
 
-- [ ] Tích hợp Socket.IO với NestJS WebSocket Gateway, xác thực JWT.
+- [x] Gateway Socket.IO và JWT, room riêng theo user, lifecycle auth; [Phase 3 Step 1](docs/phase-3-step-1.md).
 - [ ] Gửi thông báo mới đến đúng người dùng, cập nhật unread badge realtime.
 - [ ] Reconnect, đồng bộ lại qua REST API để không bỏ sót sự kiện.
 - [ ] Đánh giá Redis adapter nếu backend chạy nhiều instance.

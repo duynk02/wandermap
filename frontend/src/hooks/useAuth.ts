@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { authApi, refreshAccessToken, setSessionExpiredHandler } from "@/lib/api";
+import { authApi, getAuthSessionVersion, refreshAccessToken, setSessionExpiredHandler } from "@/lib/api";
 import type { LoginInput, RegisterInput } from "@/lib/validations";
 import { useAuthStore } from "@/stores/authStore";
 import type { CurrentUser } from "@/types";
@@ -21,11 +21,9 @@ export async function signUp(input: RegisterInput) {
 }
 
 export async function signOut() {
-  try {
-    await authApi.logout();
-  } finally {
-    useAuthStore.getState().reset();
-  }
+  // Clear the viewer/cache/socket before waiting for the logout network request.
+  useAuthStore.getState().reset();
+  await authApi.logout();
 }
 
 /**
@@ -47,12 +45,12 @@ export function useAuthListener() {
         return;
       }
       try {
-        if (!(await refreshAccessToken())) {
-          if (!cancelled) reset(); // cookie expired or revoked
-          return;
-        }
+        // refreshAccessToken resets an invalid session itself. A stale refresh result
+        // must not reset a session established by a concurrent login.
+        if (!(await refreshAccessToken()) || cancelled) return;
+        const restoredVersion = getAuthSessionVersion();
         const me = await authApi.getMe();
-        if (!cancelled) applyUser(me);
+        if (!cancelled && restoredVersion === getAuthSessionVersion()) applyUser(me);
       } catch {
         // Network/server error: not a logout. Stay signed-out for now, keep the hint.
       } finally {

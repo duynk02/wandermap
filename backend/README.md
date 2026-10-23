@@ -2,6 +2,10 @@
 
 Backend độc lập cho WanderMap, xây dựng bằng NestJS + TypeScript + PostgreSQL/PostGIS. API được tổ chức theo domain trong một **modular monolith**; PostgreSQL được truy cập qua `pg` và SQL có tham số thay vì ORM, nhằm kiểm soát rõ các truy vấn PostGIS, trigger, constraint và migration SQL hiện có.
 
+Phase 3 Step 1 bổ sung Socket.IO namespace `/realtime` trên cùng HTTP server, JWT
+middleware và room riêng theo user. Xem [contract, lifecycle và cấu hình triển khai](../docs/phase-3-step-1.md).
+Notifications vẫn dùng REST/polling; chưa phát notification/unread realtime hoặc recovery.
+
 > **Trạng thái tích hợp:** backend được thêm vào repository nhưng frontend Next.js hiện tại vẫn còn Supabase imports/API routes. Chưa chuyển frontend sang API mới trong phạm vi này. Không xóa Supabase project cũ cho đến khi hoàn tất đồng bộ frontend và kế hoạch chuyển dữ liệu.
 
 ## Yêu cầu

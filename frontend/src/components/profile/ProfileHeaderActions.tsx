@@ -117,7 +117,7 @@ export function SettingsMenu({ profileId }: { profileId: string }) {
     try {
       await signOut();
     } catch {
-      /* signOut đã reset store trong finally, vẫn tiếp tục chuyển trang */
+      /* signOut đã reset store trước request, vẫn tiếp tục chuyển trang */
     }
     router.replace("/auth/login");
   };
