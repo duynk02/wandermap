@@ -9,6 +9,11 @@ frontend refetch REST cho list/unread. Áp dụng migrations 010–012 trước 
 bản mới; xem [contract, triển khai và kiểm thử](../docs/phase-3-step-2.md). Recovery/replay
 chưa triển khai.
 
+Phase 4 Feature 1 bổ sung schema direct conversations/messages, sender-scoped
+idempotency key, thứ tự sequence và read cursor. Chạy migration 013 khi triển khai;
+REST/socket/UI messaging chưa triển khai ở bước này. Xem [thiết kế, protocol SQL và
+kiểm thử PostgreSQL](../docs/phase-4-feature-1.md).
+
 > **Trạng thái tích hợp:** backend được thêm vào repository nhưng frontend Next.js hiện tại vẫn còn Supabase imports/API routes. Chưa chuyển frontend sang API mới trong phạm vi này. Không xóa Supabase project cũ cho đến khi hoàn tất đồng bộ frontend và kế hoạch chuyển dữ liệu.
 
 ## Yêu cầu
