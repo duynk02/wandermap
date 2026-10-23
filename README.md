@@ -333,6 +333,7 @@ Roadmap là **kế hoạch**, không phải các tính năng được xác nhậ
 
 - [x] Gateway Socket.IO và JWT, room riêng theo user, lifecycle auth; [Phase 3 Step 1](docs/phase-3-step-1.md).
 - [x] Gửi thay đổi thông báo sau commit đến đúng người dùng, cập nhật unread badge qua REST; [Feature 2](docs/phase-3-step-2.md).
+- [x] Socket client dùng chung mỗi tab, Strict Mode cleanup, auth lifecycle và TanStack Query; [Feature 3](docs/phase-3-step-3.md).
 - [ ] Reconnect, đồng bộ lại qua REST API để không bỏ sót sự kiện.
 - [ ] Đánh giá Redis adapter nếu backend chạy nhiều instance.
 

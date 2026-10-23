@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { InfiniteQueryObserver, QueryClient, QueryObserver } from "@tanstack/react-query";
 import { createNotificationSync, parseNotificationChanged, refreshNotificationQueries } from "../src/lib/realtime/notifications.ts";
 import { useRealtimeStore } from "../src/stores/realtimeStore.ts";
 
@@ -12,6 +12,34 @@ const event = (patch = {}) => ({
   type: "like",
   change: "created",
   ...patch,
+});
+
+test("new/read events refresh every loaded infinite-query page and preserve page parameters", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const key = ["notifications", "list", owner];
+  let version = 0;
+  const observer = new InfiniteQueryObserver(client, {
+    queryKey: key, initialPageParam: 1, staleTime: Infinity,
+    queryFn: async ({ pageParam }) => ({
+      data: (pageParam === 1 ? (version ? [0, 1] : [1, 2]) : (version ? [2, 3] : [3, 4]))
+        .map((id) => ({ id, is_unread: version < 2 })),
+      hasMore: pageParam < 2,
+    }),
+    getNextPageParam: (last, pages) => last.hasMore ? pages.length + 1 : undefined,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    await observer.refetch();
+    await observer.fetchNextPage();
+    version = 1; // Created: a new item shifts the boundary between loaded pages.
+    await refreshNotificationQueries(client, [key], () => true);
+    assert.deepEqual(client.getQueryData(key).pageParams, [1, 2]);
+    assert.deepEqual(client.getQueryData(key).pages.flatMap((page) => page.data.map((item) => item.id)), [0, 1, 2, 3]);
+    version = 2; // Read: server is authoritative for every loaded row.
+    await refreshNotificationQueries(client, [key], () => true);
+    assert.ok(client.getQueryData(key).pages.flatMap((page) => page.data).every((item) => !item.is_unread));
+    assert.deepEqual(client.getQueryData(key).pageParams, [1, 2]);
+  } finally { unsubscribe(); client.clear(); }
 });
 
 test("notification payloads accept only known types/changes and valid identities", () => {

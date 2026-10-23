@@ -1,6 +1,6 @@
 import type { Socket } from "socket.io-client";
 
-type RealtimeSocket = Pick<Socket, "on" | "connect" | "disconnect" | "removeAllListeners">;
+type RealtimeSocket = Pick<Socket, "on" | "connect" | "disconnect" | "removeAllListeners"> & Partial<Pick<Socket, "auth">>;
 
 interface RealtimeDependencies {
   createSocket: (token: string) => RealtimeSocket;
@@ -35,13 +35,16 @@ export function createRealtimeLifecycle({ createSocket, getToken, refreshToken, 
   let refreshAttempted = false;
   let invalidated = false;
   let disposed = false;
+  let socketVersion = 0;
 
   const disconnect = () => {
+    socketVersion += 1;
     const previous = socket;
     socket = null;
     tokenUsed = null;
     previous?.removeAllListeners();
     previous?.disconnect();
+    if (previous && "auth" in previous) previous.auth = {};
     onConnectionChange?.(userId, false);
   };
 
@@ -52,9 +55,11 @@ export function createRealtimeLifecycle({ createSocket, getToken, refreshToken, 
     const next = createSocket(token);
     socket = next;
     tokenUsed = token;
+    const version = socketVersion;
+    const isCurrent = () => socket === next && socketVersion === version;
 
     const refresh = async () => {
-      if (socket !== next) return;
+      if (!isCurrent()) return;
       disconnect();
       // A refreshed token rejected by the server must not cause another refresh loop.
       if (refreshAttempted || refreshing) {
@@ -80,32 +85,32 @@ export function createRealtimeLifecycle({ createSocket, getToken, refreshToken, 
     };
 
     next.on("connect", () => {
-      if (socket !== next) return;
+      if (!isCurrent()) return;
       refreshAttempted = false;
       onConnectionChange?.(userId, true);
     });
     next.on("disconnect", () => {
-      if (socket === next) onConnectionChange?.(userId, false);
+      if (isCurrent()) onConnectionChange?.(userId, false);
     });
     next.on("notification:changed", (payload: unknown) => {
-      if (socket === next && userId) onNotification?.(userId, payload);
+      if (isCurrent() && userId) onNotification?.(userId, payload);
     });
     next.on("notifications:status", (payload: unknown) => {
-      if (socket === next && userId) onNotificationStatus?.(userId, payload);
+      if (isCurrent() && userId) onNotificationStatus?.(userId, payload);
     });
     next.on("connect_error", (error: Error & { data?: { code?: string } }) => {
-      if (socket !== next) return;
+      if (!isCurrent()) return;
       if (error.data?.code === "TOKEN_EXPIRED") {
         void refresh();
       } else if (error.data?.code === "UNAUTHORIZED" || error.data?.code === "ORIGIN_NOT_ALLOWED") {
         invalidated = true;
         disconnect();
       }
-      // Socket.IO handles transport reconnections. No REST synchronization in Step 1.
+      // Socket.IO handles transport reconnections; notification synchronization is external.
     });
     next.on("auth:expired", () => { void refresh(); });
     next.on("auth:invalidated", () => {
-      if (socket !== next) return;
+      if (!isCurrent()) return;
       invalidated = true;
       disconnect();
     });
