@@ -9,6 +9,8 @@ import { QUERY_KEYS } from "@/constants";
 import { getAccessToken, refreshAccessToken, subscribeAccessToken } from "@/lib/api/client";
 import { createRealtimeLifecycle } from "@/lib/realtime/lifecycle";
 import { createNotificationSync, refreshNotificationQueries } from "@/lib/realtime/notifications";
+import { createMessagingSync } from "@/lib/realtime/messaging";
+import { getConversationMessage } from "@/lib/api/messaging";
 import { useAuthStore } from "@/stores/authStore";
 import { useRealtimeStore } from "@/stores/realtimeStore";
 
@@ -18,6 +20,10 @@ export function useRealtimeConnection() {
 
   useEffect(() => realtimeSession.acquire(queryClient, () => {
     const origin = process.env.NEXT_PUBLIC_REALTIME_URL ?? "http://localhost:4000";
+    const messaging = createMessagingSync({ client: queryClient, keys: QUERY_KEYS.messaging,
+      getUserId: () => useAuthStore.getState().user?.id ?? null,
+      loadMessage: (conversation, message, signal) => getConversationMessage(conversation, message, signal),
+    });
     const notifications = createNotificationSync({
       getUserId: () => useAuthStore.getState().user?.id ?? null,
       invalidate: (userId) => {
@@ -35,9 +41,10 @@ export function useRealtimeConnection() {
       onConnectionChange: (userId, connected) => {
         useRealtimeStore.getState().setConnection(userId, connected);
         // Close the short polling-to-socket gap; no replay/cursor recovery protocol.
-        if (connected && userId) notifications.refresh(userId);
+        if (connected && userId) { notifications.refresh(userId); messaging.refresh(userId); }
       },
       onNotification: (userId, payload) => { notifications.receive(userId, payload); },
+      onMessagingEvent: (userId, name, payload) => { messaging.receive(userId, name, payload); },
       onNotificationStatus: (userId, payload) => {
         if (!payload || typeof payload !== "object" || !("available" in payload) || typeof payload.available !== "boolean") return;
         useRealtimeStore.getState().setNotificationsAvailable(userId, payload.available);
@@ -48,16 +55,19 @@ export function useRealtimeConnection() {
     const unsubscribeAuth = useAuthStore.subscribe((state, previous) => {
       if (state.user?.id === previous.user?.id) return;
       notifications.clear();
+      messaging.clear();
       lifecycle.setUser(state.user?.id ?? null);
       // Abort old viewer requests before removing their private notification data.
       void queryClient.cancelQueries({ queryKey: QUERY_KEYS.notifications.all });
       queryClient.removeQueries({ queryKey: QUERY_KEYS.notifications.all });
+      void queryClient.cancelQueries({ queryKey: QUERY_KEYS.messaging.all });
+      queryClient.removeQueries({ queryKey: QUERY_KEYS.messaging.all });
     });
     lifecycle.setUser(useAuthStore.getState().user?.id ?? null);
     const stopResume = observeBrowserResume(() => {
       lifecycle.resume();
       const owner = useAuthStore.getState().user?.id;
-      if (owner) notifications.refresh(owner);
+      if (owner) { notifications.refresh(owner); messaging.refresh(owner); }
     }, () => lifecycle.offline());
 
     return () => {
@@ -66,6 +76,7 @@ export function useRealtimeConnection() {
       unsubscribeAuth();
       lifecycle.dispose();
       notifications.dispose();
+      messaging.dispose();
     };
   }), [queryClient]);
 }

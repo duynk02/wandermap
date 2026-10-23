@@ -1,10 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
+import { MessagingEventPublisher } from './messaging-events.publisher';
 
 @Injectable()
 export class MessagingPolicyService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly db: DatabaseService, private readonly events: MessagingEventPublisher) {}
 
   /** Always acquire pair -> account -> conversation locks, including block/unblock. */
   async lockPair(client: PoolClient, first: string, second: string): Promise<void> {
@@ -29,16 +30,16 @@ export class MessagingPolicyService {
 
   async setBlock(viewer: string, target: string, blocked: boolean): Promise<{ user_id: string; blocked: boolean }> {
     if (viewer === target) throw new BadRequestException('Bạn không thể chặn chính mình.');
-    return this.db.transaction(async (client) => {
+    const changed = await this.db.transaction(async (client) => {
       await this.lockPair(client, viewer, target);
       await this.lockAccounts(client, viewer, target);
       if (!(await client.query('SELECT id FROM profiles WHERE id = $1', [target])).rowCount) throw new NotFoundException('Không tìm thấy người dùng.');
-      if (blocked) {
-        await client.query('INSERT INTO messaging_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [viewer, target]);
-      } else {
-        await client.query('DELETE FROM messaging_blocks WHERE blocker_id = $1 AND blocked_id = $2', [viewer, target]);
-      }
-      return { user_id: target, blocked };
+      const mutation = blocked
+        ? await client.query('INSERT INTO messaging_blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [viewer, target])
+        : await client.query('DELETE FROM messaging_blocks WHERE blocker_id = $1 AND blocked_id = $2', [viewer, target]);
+      return !!mutation.rowCount;
     });
+    if (changed) await this.events.policy(viewer, target);
+    return { user_id: target, blocked };
   }
 }

@@ -5,8 +5,9 @@ import { Namespace, Socket } from 'socket.io';
 import { AccessTokenError, AccessTokenService, VerifiedAccessToken } from '../auth/access-token.service';
 import { realtimeOrigins } from './realtime-io.adapter';
 import type { NotificationChangedEvent } from '../notifications/notification-events';
+import type { MessagingEvent, MessagingServerEvents } from '../messaging/messaging-events';
 
-interface LifecycleEvents {
+interface LifecycleEvents extends MessagingServerEvents {
   'auth:expired': (payload: Record<string, never>) => void;
   'auth:invalidated': (payload: Record<string, never>) => void;
   'auth:unavailable': (payload: Record<string, never>) => void;
@@ -80,17 +81,35 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
 
   /** Transport only. Business persistence has already committed independently. */
   async emitNotificationChange(event: NotificationChangedEvent): Promise<void> {
-    if (this.closing || !this.server) return;
-    const members = this.server.adapter.rooms.get(`user:${event.recipient_id}`);
-    if (!members?.size) return; // Offline users keep their notifications in PostgreSQL.
-    await this.accessTokens.assertActive(event.recipient_id);
+    for (const client of await this.authorizedRecipientSockets(event.recipient_id)) client.emit('notification:changed', event);
+  }
+
+  /** Transport only; room identities and event fields come from server-side DB rows. */
+  async emitMessagingEvent(recipient: string, event: MessagingEvent): Promise<void> {
+    if (event.payload.recipient_id !== recipient) return;
+    for (const client of await this.authorizedRecipientSockets(recipient)) {
+      switch (event.name) {
+        case 'message:new': client.emit(event.name, event.payload); break;
+        case 'message:read': client.emit(event.name, event.payload); break;
+        case 'conversation:updated': client.emit(event.name, event.payload); break;
+      }
+    }
+  }
+
+  private async authorizedRecipientSockets(recipient: string): Promise<RealtimeSocket[]> {
+    if (this.closing || !this.server) return [];
+    const members = this.server.adapter.rooms.get(`user:${recipient}`);
+    if (!members?.size) return []; // Offline users recover durable state through REST.
+    await this.accessTokens.assertActive(recipient);
+    const clients: RealtimeSocket[] = [];
     for (const id of members) {
       const client = this.server.sockets.get(id) as RealtimeSocket | undefined;
-      if (!client?.connected || client.data.user?.sub !== event.recipient_id) continue;
+      if (this.closing || !client?.connected || client.data.user?.sub !== recipient) continue;
       // Timers can run late under load. Check expiration immediately before private delivery.
       if (client.data.user.exp * 1000 <= Date.now()) { this.endConnection(client, 'auth:expired'); continue; }
-      client.emit('notification:changed', event);
+      clients.push(client);
     }
+    return clients;
   }
 
   onModuleDestroy(): void {

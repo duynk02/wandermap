@@ -6,9 +6,10 @@ import { postAccess } from '../posts/post-access';
 import { ConversationQueryDto, CreateMessageDto, MessageQueryDto, ReadConversationDto } from './dto/messaging.dto';
 import { CONVERSATION_SELECT, MESSAGE_JSON } from './message-projection';
 import { MessagingPolicyService } from './messaging-policy.service';
+import { MessagingEventPublisher } from './messaging-events.publisher';
 import type { ConversationDto, CursorPage, MessageDto, MessagingUnreadCount, ReadConversationResult, SendMessageResult } from './messaging.types';
 
-interface MemberConversation { id: string; recipient_id: string; }
+interface MemberConversation { id: string; recipient_id: string; last_read_sequence: string | null; }
 interface ConversationRow { conversation: ConversationDto; cursor_time: string; }
 interface StoredMessage { id: string; conversation_id: string; message_type: string; content: string | null; shared_resource_id: string | null; }
 
@@ -33,7 +34,7 @@ function decodeCursor(value?: string): [string, string] | null {
 
 @Injectable()
 export class MessagingService {
-  constructor(private readonly db: DatabaseService, private readonly policy: MessagingPolicyService) {}
+  constructor(private readonly db: DatabaseService, private readonly policy: MessagingPolicyService, private readonly events: MessagingEventPublisher) {}
 
   async list(viewer: string, query: ConversationQueryDto): Promise<CursorPage<ConversationDto>> {
     const cursor = decodeCursor(query.cursor);
@@ -70,7 +71,7 @@ export class MessagingService {
   async direct(viewer: string, recipientId: string): Promise<{ conversation: ConversationDto; created: boolean }> {
     const recipient = recipientId.toLowerCase();
     if (viewer === recipient) throw new BadRequestException('Bạn không thể nhắn tin cho chính mình.');
-    return this.db.transaction(async (client) => {
+    const result = await this.db.transaction(async (client) => {
       await this.policy.lockPair(client, viewer, recipient);
       const active = await this.policy.lockAccounts(client, viewer, recipient);
       if (!active || !(await client.query('SELECT id FROM profiles WHERE id = $1', [recipient])).rowCount) {
@@ -85,10 +86,12 @@ export class MessagingService {
       if (!id) throw new NotFoundException('Không tìm thấy cuộc trò chuyện.');
       return { conversation: await this.get(viewer, id, client), created: !!inserted.rowCount };
     });
+    if (result.created) await this.events.conversation(result.conversation.id, 'created');
+    return result;
   }
 
   private async member(viewer: string, conversation: string, client?: PoolClient, lock = false): Promise<MemberConversation> {
-    const sql = `SELECT c.id, CASE WHEN c.direct_user_low_id = $1 THEN c.direct_user_high_id ELSE c.direct_user_low_id END AS recipient_id
+    const sql = `SELECT c.id, cp.last_read_sequence, CASE WHEN c.direct_user_low_id = $1 THEN c.direct_user_high_id ELSE c.direct_user_low_id END AS recipient_id
       FROM conversations c JOIN conversation_participants cp ON cp.conversation_id = c.id AND cp.user_id = $1
       WHERE c.id = $2 ${lock ? 'FOR UPDATE OF c' : ''}`;
     const result = client
@@ -116,6 +119,15 @@ export class MessagingService {
       WHERE m.conversation_id = $2 AND m.id = $3`, [viewer, conversation, id]);
     if (!result.rows[0]) throw new NotFoundException('Không tìm thấy tin nhắn.');
     return result.rows[0].message;
+  }
+
+  async message(viewer: string, conversation: string, id: string): Promise<MessageDto> {
+    await this.member(viewer, conversation);
+    const row = (await this.db.query<{ message: MessageDto }>(`SELECT ${MESSAGE_JSON} AS message FROM messages m
+      JOIN conversation_participants cp ON cp.conversation_id = m.conversation_id AND cp.user_id = $1
+      WHERE m.conversation_id = $2 AND m.id = $3`, [viewer, conversation, id])).rows[0];
+    if (!row) throw new NotFoundException('Không tìm thấy tin nhắn.');
+    return row.message;
   }
 
   private samePayload(existing: StoredMessage, conversation: string, dto: CreateMessageDto, content: string | null): void {
@@ -150,7 +162,7 @@ export class MessagingService {
     const content = dto.content?.trim() || null;
     if ((dto.message_type === 'text' && (!content || dto.shared_resource_id !== undefined))
       || (dto.message_type !== 'text' && !dto.shared_resource_id)) throw new BadRequestException('Nội dung hoặc tham chiếu tin nhắn không hợp lệ.');
-    return this.db.transaction(async (client) => {
+    const result = await this.db.transaction(async (client) => {
       const initial = await this.member(viewer, conversation, client);
       await this.policy.lockPair(client, viewer, initial.recipient_id);
       const active = await this.policy.lockAccounts(client, viewer, initial.recipient_id);
@@ -173,20 +185,25 @@ export class MessagingService {
       if (!stored) throw new ConflictException({ code: 'IDEMPOTENCY_CONFLICT', message: 'Trạng thái gửi tin vừa thay đổi. Vui lòng thử lại với cùng mã gửi tin.' });
       this.samePayload(stored, current.id, dto, content);
       return { message: await this.projectMessage(client, viewer, current.id, stored.id), created: !!inserted.rowCount };
-    }); // Feature 3 publishes only after this transaction promise resolves.
+    });
+    if (result.created) await this.events.message(result.message.conversation_id, result.message.id);
+    return result;
   }
 
   async markRead(viewer: string, conversation: string, dto: ReadConversationDto): Promise<ReadConversationResult> {
     const target = sequence(dto.last_read_sequence);
-    return this.db.transaction(async (client) => {
+    const { result, changed } = await this.db.transaction(async (client) => {
       await this.policy.lockAccounts(client, viewer, viewer);
-      await this.member(viewer, conversation, client, true);
+      const before = await this.member(viewer, conversation, client, true);
       if (!(await client.query('SELECT id FROM messages WHERE conversation_id = $1 AND sequence = $2', [conversation, target])).rowCount) {
         throw new BadRequestException({ code: 'INVALID_READ_CURSOR', message: 'Không tìm thấy tin nhắn tại vị trí đọc trong cuộc trò chuyện này.' });
       }
       await client.query('UPDATE conversation_participants SET last_read_sequence = $3 WHERE conversation_id = $1 AND user_id = $2', [conversation, viewer, target]);
       const current = await this.get(viewer, conversation, client);
-      return { conversation_id: current.id, ...current.read_state, unread_count: current.unread_count };
+      return { result: { conversation_id: current.id, ...current.read_state, unread_count: current.unread_count },
+        changed: current.read_state.last_read_sequence !== before.last_read_sequence };
     });
+    if (changed) await this.events.read(result.conversation_id, viewer);
+    return result;
   }
 }

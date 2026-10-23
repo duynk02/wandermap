@@ -83,7 +83,9 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true, forbidUnknownValues: true }));
     app.useGlobalFilters(new ApiExceptionFilter());
-    await app.init();
+    // The shared gateway also owns the HTTP server. Keep it listening throughout
+    // the suite instead of having concurrent Supertest requests reopen/close it.
+    await app.listen(0, '127.0.0.1');
   });
 
   beforeEach(async () => {

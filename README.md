@@ -208,6 +208,8 @@ npm run dev
 
 Mở **http://localhost:3000**. Nếu thay `API_INTERNAL_URL`, restart hoặc rebuild Next.js vì rewrite được cấu hình theo biến môi trường khi Next.js tạo cấu hình ứng dụng.
 
+Next.js lưu output development trong `frontend/.next-dev/`, còn `npm run build` và `npm start` dùng `frontend/.next/`. Hai thư mục riêng giúp build không xóa manifest của dev server đang chạy. Nếu gặp lỗi `ENOENT` với manifest sau khi build bằng cấu hình cũ, dừng frontend bằng `Ctrl+C` rồi chạy lại `npm run dev` để áp dụng cấu hình này.
+
 ### 4. Sự cố thường gặp
 
 | Triệu chứng | Kiểm tra |

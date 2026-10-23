@@ -1,4 +1,5 @@
 import type { Socket } from "socket.io-client";
+import type { MessagingEventName } from "./messaging";
 
 type RealtimeSocket = Pick<Socket, "on" | "connect" | "disconnect" | "removeAllListeners"> & Partial<Pick<Socket, "auth">>;
 
@@ -11,6 +12,7 @@ interface RealtimeDependencies {
   onConnectionChange?: (userId: string | null, connected: boolean) => void;
   onNotification?: (userId: string, payload: unknown) => void;
   onNotificationStatus?: (userId: string, payload: unknown) => void;
+  onMessagingEvent?: (userId: string, name: MessagingEventName, payload: unknown) => void;
   onPhaseChange?: (phase: RealtimePhase) => void;
 }
 
@@ -29,7 +31,7 @@ export function accessTokenSubject(token: string): string | null {
 }
 
 /** Owns one authenticated transport; notification business logic stays outside the socket. */
-export function createRealtimeLifecycle({ createSocket, getToken, refreshToken, onConnectionChange, onNotification, onNotificationStatus, onPhaseChange }: RealtimeDependencies) {
+export function createRealtimeLifecycle({ createSocket, getToken, refreshToken, onConnectionChange, onNotification, onNotificationStatus, onMessagingEvent, onPhaseChange }: RealtimeDependencies) {
   let userId: string | null = null;
   let socket: RealtimeSocket | null = null;
   let tokenUsed: string | null = null;
@@ -136,6 +138,9 @@ export function createRealtimeLifecycle({ createSocket, getToken, refreshToken, 
     next.on("notifications:status", (payload: unknown) => {
       if (isCurrent() && userId) onNotificationStatus?.(userId, payload);
     });
+    for (const name of ["message:new", "message:read", "conversation:updated"] as const) {
+      next.on(name, (payload: unknown) => { if (isCurrent() && userId) onMessagingEvent?.(userId, name, payload); });
+    }
     next.on("connect_error", (error: Error & { data?: { code?: string } }) => {
       if (!isCurrent()) return;
       if (error.data?.code === "TOKEN_EXPIRED") {

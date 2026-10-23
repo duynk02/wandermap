@@ -18,6 +18,10 @@ Phase 4 Feature 2 có Messaging REST API, cursor pagination, authorization, read
 idempotency và block nhắn tin tối thiểu (migration 014). Frontend có wrappers/types;
 messaging socket events/UI chưa triển khai. Xem [API contract, policy và kiểm thử](../docs/phase-4-feature-2.md).
 
+Phase 4 Feature 3 tích hợp message/read/conversation events sau commit vào namespace
+`/realtime`, user-room fanout và frontend REST reconciliation khi reconnect.
+Chưa có UI chat; xem [event contract, cache synchronization và multi-tab tests](../docs/phase-4-feature-3.md).
+
 > **Trạng thái tích hợp:** backend được thêm vào repository nhưng frontend Next.js hiện tại vẫn còn Supabase imports/API routes. Chưa chuyển frontend sang API mới trong phạm vi này. Không xóa Supabase project cũ cho đến khi hoàn tất đồng bộ frontend và kế hoạch chuyển dữ liệu.
 
 ## Yêu cầu

@@ -4,11 +4,13 @@ import { MessagingBlocksController, MessagingController } from './messaging.cont
 import { MessagingPolicyService } from './messaging-policy.service';
 import { MessagingRateLimitGuard } from './messaging-rate-limit.guard';
 import { MessagingService } from './messaging.service';
+import { RealtimeModule } from '../realtime/realtime.module';
+import { MessagingEventPublisher } from './messaging-events.publisher';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, RealtimeModule],
   controllers: [MessagingController, MessagingBlocksController],
-  providers: [MessagingService, MessagingPolicyService, MessagingRateLimitGuard],
+  providers: [MessagingService, MessagingPolicyService, MessagingRateLimitGuard, MessagingEventPublisher],
   exports: [MessagingService],
 })
 export class MessagingModule {}

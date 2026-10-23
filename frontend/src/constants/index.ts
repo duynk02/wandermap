@@ -42,6 +42,7 @@ export const LOCATION_CATEGORIES: {
 export const QUERY_KEYS = {
   messaging: {
     all: ["messaging"] as const,
+    viewer: (viewer: string) => ["messaging", viewer] as const,
     conversations: (viewer: string) => ["messaging", viewer, "conversations"] as const,
     conversation: (viewer: string, id: string) => ["messaging", viewer, "conversation", id] as const,
     messages: (viewer: string, id: string) => ["messaging", viewer, "messages", id] as const,

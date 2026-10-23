@@ -49,6 +49,13 @@ export class MessagingController {
     return this.messaging.send(user.sub.toLowerCase(), id, dto);
   }
 
+  @Get(':id/messages/:messageId') @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({ summary: 'Resolve one committed message event with current membership/resource permissions' })
+  message(@CurrentUser() user: AuthenticatedUser, @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('messageId', new ParseUUIDPipe()) messageId: string) {
+    return this.messaging.message(user.sub.toLowerCase(), id, messageId);
+  }
+
   @Patch(':id/read') @Header('Cache-Control', 'private, no-store')
   @ApiOperation({ summary: 'Advance my read cursor without moving it backwards' })
   read(@CurrentUser() user: AuthenticatedUser, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: ReadConversationDto) {

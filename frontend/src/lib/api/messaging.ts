@@ -13,6 +13,9 @@ export const startDirectConversation = (recipientId: string) =>
 export const getConversationMessages = (id: string, query: { before_sequence?: string; limit?: number } = {}, signal?: AbortSignal) =>
   apiFetch<CursorPage<ChatMessage>>(`/conversations/${id}/messages`, { query: { ...query }, signal });
 
+export const getConversationMessage = (conversationId: string, messageId: string, signal?: AbortSignal) =>
+  apiFetch<ChatMessage>(`/conversations/${conversationId}/messages/${messageId}`, { signal });
+
 /** Generate client_message_id once at submission; reuse it for every retry. */
 export const sendConversationMessage = (id: string, input: SendMessageInput) =>
   apiFetch<SendMessageResult>(`/conversations/${id}/messages`, { method: "POST", body: input });
