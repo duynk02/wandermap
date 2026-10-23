@@ -19,6 +19,13 @@ export const setPostSaved = (postId: string, saved: boolean) =>
     method: saved ? "POST" : "DELETE",
   });
 
+/** Private bookmarks for the current session, newest saved first. */
+export const getSavedPosts = (page = 1, signal?: AbortSignal) =>
+  apiFetch<PaginatedResponse<Post>>("/posts/saved", {
+    query: { page, pageSize: DEFAULT_PAGE_SIZE },
+    signal,
+  });
+
 export const getPostsByLocation = (locationId: string, page = 1) =>
   apiFetch<PaginatedResponse<Post>>(`/posts/by-location/${encodeURIComponent(locationId)}`, {
     query: { page, pageSize: DEFAULT_PAGE_SIZE },

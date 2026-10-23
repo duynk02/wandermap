@@ -8,6 +8,7 @@ import { CreatePostDto, UpdatePostDto } from './dto/create-post.dto';
 import { PostQueryDto } from './dto/post-query.dto';
 import { PostsService } from './posts.service';
 import { ShareJourneyDto } from './dto/share-journey.dto';
+import { SavedPostQueryDto } from './dto/saved-post-query.dto';
 
 @ApiTags('Posts')
 @Controller('posts')
@@ -24,6 +25,14 @@ export class PostsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get posts from users followed by the authenticated user' })
   following(@CurrentUser() user: AuthenticatedUser, @Query() query: PostQueryDto) { return this.posts.followingFeed(user.sub, query); }
+
+  @Get('saved')
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List the authenticated user saved posts that are still visible' })
+  saved(@CurrentUser() user: AuthenticatedUser, @Query() query: SavedPostQueryDto) {
+    return this.posts.saved(user.sub, query);
+  }
 
   @Get('by-location/:locationId')
   @ApiOperation({ summary: 'Get public posts at a location' })

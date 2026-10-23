@@ -29,7 +29,7 @@ describeDatabase('Journey posts: real HTTP, PostgreSQL/PostGIS, triggers and con
   const schema = `journey_posts_${randomUUID().replaceAll('-', '')}`;
   const secret = 'isolated-journey-post-test-secret-at-least-32-characters';
   const jwt = new JwtService({ secret });
-  const token = (id = owner) => `Bearer ${jwt.sign({ sub: id, email: `${id}@example.test` })}`;
+  const token = (id = owner) => `Bearer ${jwt.sign({ sub: id, email: `${id}@example.test` }, { expiresIn: 300 })}`;
   const image = 'https://example.test/preview.webp';
   const http = () => app.getHttpServer();
   const share = (journey: { id: string; revision: number }, extra = {}, actor = owner) => request(http())
@@ -69,7 +69,7 @@ describeDatabase('Journey posts: real HTTP, PostgreSQL/PostGIS, triggers and con
     finally { await setup.end(); }
     pool = new Pool({ connectionString: databaseUrl, options: `-c search_path=${schema},public`, max: 10 });
     const module = await Test.createTestingModule({ imports: [
-      ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, load: [() => ({ JWT_ACCESS_SECRET: secret })] }),
+      ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, skipProcessEnv: true, load: [() => ({ JWT_ACCESS_SECRET: secret })] }),
       DatabaseModule, PostsModule, JourneysModule, CommentsModule, NotificationsModule,
     ] }).overrideProvider(DatabaseService).useValue({
       query: (sql: string, values: unknown[]) => pool.query(sql, values),
@@ -206,5 +206,75 @@ describeDatabase('Journey posts: real HTTP, PostgreSQL/PostGIS, triggers and con
     await expect(pool.query("INSERT INTO posts (author_id, post_type, journey_id, preview_revision, content) VALUES ($1, 'journey', $2, 1, '')", [other, journey.id])).rejects.toMatchObject({ code: '23503' });
     await expect(pool.query("INSERT INTO posts (author_id, content) VALUES ($1, 'Missing location/rating/date')", [owner])).rejects.toMatchObject({ code: '23514' });
     await expect(pool.query("INSERT INTO posts (author_id, post_type, content) VALUES ($1, 'unsupported', 'Invalid type')", [owner])).rejects.toMatchObject({ code: '23514' });
+  });
+
+  it('protects saved collections and validates pagination without accepting another user identity', async () => {
+    await request(http()).get('/api/v1/posts/saved').expect(401);
+    await request(http()).get('/api/v1/posts/saved').set('Authorization', token(inactive)).expect(401);
+    for (const query of [{ page: 0 }, { page: 'bad' }, { pageSize: 51 }, { pageSize: -1 }, { user_id: owner }, { author_id: owner }]) {
+      await request(http()).get('/api/v1/posts/saved').set('Authorization', token(other)).query(query).expect(400);
+    }
+  });
+
+  it('lists only the caller bookmarks in stable saved order, paginates and removes an unsaved card', async () => {
+    await pool.query('DELETE FROM saves WHERE user_id IN ($1, $2)', [owner, other]);
+    const posts: string[] = [];
+    for (const content of ['Bài đã lưu 1', 'Bài đã lưu 2', 'Bài đã lưu 3']) {
+      const created = await request(http()).post('/api/v1/posts').set('Authorization', token())
+        .send({ location_id: locations[0], content, rating: 5, visited_at: '2026-10-23' }).expect(201);
+      posts.push(created.body.id);
+      for (let retry = 0; retry < 2; retry++) {
+        await request(http()).post(`/api/v1/posts/${created.body.id}/save`).set('Authorization', token(other))
+          .expect(201).expect(({ body }) => expect(body).toEqual({ saved: true, saves_count: 1 }));
+      }
+    }
+    // Equal saved times must still have a stable order across page boundaries.
+    await pool.query("UPDATE saves SET created_at = '2026-10-23T00:00:00Z' WHERE user_id = $1", [other]);
+    const expected = [...posts].sort().reverse();
+    for (let page = 1; page <= 2; page++) {
+      const result = await request(http()).get('/api/v1/posts/saved').set('Authorization', token(other)).query({ page, pageSize: 2 }).expect(200);
+      expect(result.body).toMatchObject({ count: 3, page, pageSize: 2, hasMore: page === 1 });
+      expect(result.body.data.map((post: { id: string }) => post.id)).toEqual(expected.slice((page - 1) * 2, page * 2));
+      expect(result.body.data.every((post: { is_saved: boolean; author_id: string }) => post.is_saved && post.author_id === owner)).toBe(true);
+    }
+    await request(http()).get('/api/v1/posts/saved').set('Authorization', token()).expect(200, { data: [], count: 0, page: 1, pageSize: 12, hasMore: false });
+    for (let retry = 0; retry < 2; retry++) {
+      await request(http()).delete(`/api/v1/posts/${expected[0]}/save`).set('Authorization', token(other))
+        .expect(200).expect(({ body }) => expect(body).toEqual({ saved: false, saves_count: 0 }));
+    }
+    const remaining = await request(http()).get('/api/v1/posts/saved').set('Authorization', token(other)).expect(200);
+    expect(remaining.body.count).toBe(2);
+    expect(remaining.body.data.map((post: { id: string }) => post.id)).toEqual(expected.slice(1));
+    await request(http()).delete(`/api/v1/posts/${expected[1]}`).set('Authorization', token()).expect(200);
+    await request(http()).get('/api/v1/posts/saved').set('Authorization', token(other)).expect(200)
+      .expect(({ body }) => expect(body.count).toBe(1));
+  });
+
+  it('rechecks visibility of saved posts, followers and Journey publications on every list/count', async () => {
+    await pool.query('DELETE FROM saves WHERE user_id = $1', [other]);
+    const locationPost = (await request(http()).post('/api/v1/posts').set('Authorization', token())
+      .send({ location_id: locations[0], content: 'Bài thay đổi quyền xem', rating: 4, visited_at: '2026-10-23' }).expect(201)).body;
+    await request(http()).post(`/api/v1/posts/${locationPost.id}/save`).set('Authorization', token(other)).expect(201);
+    await pool.query("UPDATE posts SET visibility = 'followers' WHERE id = $1", [locationPost.id]);
+    await pool.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [other, owner]);
+    const count = async (expected: number) => request(http()).get('/api/v1/posts/saved').set('Authorization', token(other)).expect(200)
+      .expect(({ body }) => { expect(body.count).toBe(expected); expect(body.data).toHaveLength(expected); });
+    await count(0);
+    await pool.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $2)', [other, owner]);
+    await count(1);
+    await pool.query("UPDATE posts SET visibility = 'private' WHERE id = $1", [locationPost.id]);
+    await count(0);
+    const journey = await create();
+    const shared = (await share(journey).expect(201)).body.post;
+    await request(http()).post(`/api/v1/posts/${shared.id}/save`).set('Authorization', token(other)).expect(201);
+    await request(http()).get('/api/v1/posts/saved').set('Authorization', token(other)).expect(200)
+      .expect(({ body }) => expect(body.data[0]).toMatchObject({ id: shared.id, post_type: 'journey', is_saved: true }));
+    await patch(journey, { visibility: 'private' });
+    await count(0);
+    await pool.query("UPDATE posts SET visibility = 'public' WHERE id = $1", [locationPost.id]);
+    await count(1);
+    await pool.query('UPDATE users SET is_active = false WHERE id = $1', [owner]);
+    await count(0);
+    await pool.query('UPDATE users SET is_active = true WHERE id = $1', [owner]);
   });
 });

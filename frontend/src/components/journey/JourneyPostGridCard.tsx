@@ -15,7 +15,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { QUERY_KEYS, ROUTES } from "@/constants";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import { setPostLiked, setPostSaved } from "@/lib/api";
+import { setPostLiked } from "@/lib/api";
+import { usePostSave } from "@/hooks/usePostSave";
 import {
   cn,
   formatCount,
@@ -32,8 +33,7 @@ export function JourneyPostGridCard({ post }: { post: JourneyPost }) {
   const requireAuth = useRequireAuth();
   const [liked, setLiked] = useState(post.is_liked ?? false);
   const [likesCount, setLikesCount] = useState(post.likes_count);
-  const [saved, setSaved] = useState(post.is_saved ?? false);
-  const [savesCount, setSavesCount] = useState(post.saves_count);
+  const { saved, savesCount, saveMutation: save } = usePostSave(post);
   const [failedImage, setFailedImage] = useState<string | null>(null);
   const journey = post.journey;
   const image = post.images[0];
@@ -63,15 +63,6 @@ export function JourneyPostGridCard({ post }: { post: JourneyPost }) {
       }
       toast.error("Không thể cập nhật lượt thích");
     },
-  });
-  const save = useMutation({
-    mutationFn: (next: boolean) => setPostSaved(post.id, next),
-    onSuccess: (result) => {
-      setSaved(result.saved);
-      setSavesCount(result.saves_count);
-      refresh();
-    },
-    onError: () => toast.error("Không thể cập nhật bài đã lưu"),
   });
   return (
     <article

@@ -226,7 +226,7 @@ Mở **http://localhost:3000**. Nếu thay `API_INTERNAL_URL`, restart hoặc re
 | Xác thực | Register, login, refresh, logout, `/auth/me` | Google OAuth backend chưa có; kiểm tra flows triển khai thực tế |
 | Bản đồ & địa điểm | Mapbox map, marker/clustering, viewport, trending, location detail, tìm địa điểm qua Photon | Kiểm tra độ chính xác dữ liệu, tối ưu tìm kiếm và giao diện |
 | Bài đăng | Tạo/xem/sửa/xóa bài, ảnh, rating, gắn location, feed công khai/following | Image Lightbox chưa thấy trong ZIP |
-| Tương tác xã hội | Follow/unfollow, like/unlike, save/unsave, bình luận và replies | Tiếp tục hoàn thiện UX và các edge cases |
+| Tương tác xã hội | Follow/unfollow, like/unlike, save/unsave, tab Đã lưu trong hồ sơ, bình luận và replies | Danh sách đã lưu riêng tư, chỉ giữ bài còn quyền xem |
 | Profile | Trang hồ sơ, chỉ số, bản đồ cá nhân; `PATCH /users/me` hỗ trợ tên, avatar URL và bio | Form chỉnh sửa đầy đủ, cover, username, website còn là kế hoạch |
 | Travel map & Journey | Visited/wishlist, lịch sử ghé thăm; bản đồ Profile/bộ lọc/thống kê; Journey Builder nháp/công khai; xuất poster PNG 1:1 và 4:5 | Journey Post và Travel Passport chưa có |
 | Itineraries | Backend có API itinerary và itinerary stops | Không đồng nghĩa đã có trình dựng hành trình drag-and-drop trên frontend |
@@ -260,13 +260,22 @@ Backend định nghĩa global prefix **`/api/v1`**; xem toàn bộ contract, DTO
 | Locations | `GET /locations`, `/locations/in-viewport`, `/locations/trending`, `/locations/:id` |
 | Places | `GET /places/search` |
 | Posts | `GET /posts/feed`, `/posts/following`, `/posts/:id`; `POST/PATCH/DELETE /posts` theo quyền |
-| Engagement | `POST/DELETE /posts/:id/like`, `/posts/:id/save` |
+| Engagement | `POST/DELETE /posts/:id/like`, `/posts/:id/save`; `GET /posts/saved?page=1&pageSize=12` (JWT) |
 | Comments | `GET/POST /posts/:postId/comments`, replies và thao tác sửa/xóa/like bình luận |
 | Notifications | `GET /notifications`, `/notifications/unread-count`; `POST /notifications/read`, `/notifications/read-all` |
 | Itineraries | `GET/POST /itineraries`, quản lý `/itineraries/:id/stops` |
 | Uploads | `POST /uploads/images` |
 
 Các path trong bảng là đường dẫn **sau** `/api/v1`.
+
+Tab **Đã lưu** trong hồ sơ tải bài viết qua browser session, chỉ hiển thị bộ sưu tập
+của chính người đăng nhập. API dùng user ID từ JWT, sắp xếp theo lần lưu gần nhất và
+áp dụng lại quyền xem bài/Journey cho cả danh sách lẫn tổng số. Lưu/bỏ lưu cập nhật
+cache Feed, chi tiết và danh sách đã lưu. Chức năng dùng bảng `saves` hiện có, không cần migration/env mới.
+Kiểm thử PostgreSQL nằm trong `backend/test/journey-posts.db-spec.ts`; Chrome regression
+chạy `node tests/saved-posts.browser.mjs` từ `frontend/` với `WANDERMAP_TEST_WEB_URL`
+và `WANDERMAP_TEST_API_URL` trỏ tới web/API local. Browser test chỉ giả lập mutation,
+không ghi dữ liệu ứng dụng.
 
 ### Database & migrations
 
