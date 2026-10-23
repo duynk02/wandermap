@@ -246,7 +246,7 @@ export interface DeleteCommentResult {
 
 
 // Notifications
-export type NotificationType = 'follow' | 'like' | 'comment';
+export type NotificationType = 'follow' | 'like' | 'comment' | 'comment_like' | 'reply';
 
 /** One line of the notification list. All likes (or comments) on one post are a single item. */
 export interface NotificationItem {

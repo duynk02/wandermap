@@ -1,9 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query";
+import type { NotificationType } from "@/types";
 
 export interface NotificationChangedEvent {
   notification_id: string;
   recipient_id: string;
-  type: "follow" | "like" | "comment";
+  type: NotificationType;
   change: "created" | "read" | "deleted";
 }
 
@@ -14,7 +15,7 @@ export function parseNotificationChanged(value: unknown): NotificationChangedEve
   const event = value as Record<string, unknown>;
   if (typeof event.notification_id !== "string" || !UUID.test(event.notification_id)
     || typeof event.recipient_id !== "string" || !UUID.test(event.recipient_id)
-    || typeof event.type !== "string" || !["follow", "like", "comment"].includes(event.type)
+    || typeof event.type !== "string" || !["follow", "like", "comment", "comment_like", "reply"].includes(event.type)
     || typeof event.change !== "string" || !["created", "read", "deleted"].includes(event.change)) return null;
   return {
     notification_id: event.notification_id,

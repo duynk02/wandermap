@@ -17,7 +17,7 @@ export function parseNotificationChange(payload: string): NotificationChangedEve
   const item = value as Record<string, unknown>;
   if (typeof item.notification_id !== 'string' || !isUUID(item.notification_id)
     || typeof item.recipient_id !== 'string' || !isUUID(item.recipient_id)
-    || typeof item.type !== 'string' || !['follow', 'like', 'comment'].includes(item.type)
+    || typeof item.type !== 'string' || !['follow', 'like', 'comment', 'comment_like', 'reply'].includes(item.type)
     || typeof item.change !== 'string' || !['created', 'read', 'deleted'].includes(item.change)) return null;
   // Construct an allowlisted payload; never forward unknown DB payload fields.
   return {

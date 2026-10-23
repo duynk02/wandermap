@@ -5,7 +5,7 @@ import { postAccess } from '../posts/post-access';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { parseNotificationChange } from './notification-events';
 
-export type NotificationType = 'follow' | 'like' | 'comment';
+export type NotificationType = 'follow' | 'like' | 'comment' | 'comment_like' | 'reply';
 
 export interface NotificationActor {
   id: string;
@@ -16,7 +16,7 @@ export interface NotificationActor {
 
 /** One line in the notification list: all likes (or comments) on one post are a single item. */
 export interface NotificationItem {
-  /** Stable group key: the notification id for follows, "type:postId" for likes and comments. */
+  /** Stable notification UUID, or "type:postId" for grouped post likes/comments. */
   id: string;
   type: NotificationType;
   /** The most recent distinct actors (at most 2), newest first. */
@@ -38,8 +38,8 @@ export interface NotificationPage {
   hasMore: boolean;
 }
 
-// likes and comments on the same post collapse into one item; every follow stays its own item.
-const GROUP_KEY = `CASE WHEN n.type = 'follow' THEN n.id::text ELSE n.type || ':' || n.post_id::text END`;
+// Only post likes/comments are grouped. Comment interactions keep their own stable ID.
+const GROUP_KEY = `CASE WHEN n.type IN ('like', 'comment') THEN n.type || ':' || n.post_id::text ELSE n.id::text END`;
 const EVENT_ACCESS = `(n.post_id IS NULL OR EXISTS (SELECT 1 FROM posts p WHERE p.id = n.post_id AND ${postAccess()}))`;
 
 @Injectable()
@@ -94,7 +94,7 @@ export class NotificationsService {
     return { data: rows.rows, count, page, pageSize, hasMore: (page - 1) * pageSize + rows.rows.length < count };
   }
 
-  /** Number of unread interactions: every new like, comment or follow adds one. */
+  /** Authoritative number of unread interactions, including comment likes and replies. */
   async unreadCount(userId: string): Promise<{ count: number }> {
     const result = await this.db.query<{ count: number }>(
       `SELECT COUNT(*)::int AS count FROM notifications n WHERE n.recipient_id = $1 AND n.read_at IS NULL AND ${EVENT_ACCESS}`,
@@ -114,7 +114,7 @@ export class NotificationsService {
     const result = parts.length === 1
       ? await this.db.query(
         `UPDATE notifications n SET read_at = now()
-         WHERE n.recipient_id = $1 AND n.id = $2::uuid AND n.type = 'follow' AND n.read_at IS NULL AND ${EVENT_ACCESS}`,
+         WHERE n.recipient_id = $1 AND n.id = $2::uuid AND n.type IN ('follow', 'comment_like', 'reply') AND n.read_at IS NULL AND ${EVENT_ACCESS}`,
         [userId, parts[0]],
       )
       : await this.db.query(

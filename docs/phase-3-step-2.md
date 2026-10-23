@@ -6,10 +6,13 @@ Notification mới, thay đổi đã đọc và xóa/undo được đẩy đến
 của đúng người nhận. Danh sách và unread count tiếp tục lấy từ REST/PostgreSQL.
 Gateway/JWT, token memory, shared refresh và room isolation của Step 1 được tái sử dụng.
 
-Các loại hiện có là `follow`, `like`, `comment`; reply gửi cho tác giả bài như comment.
-Like/comment trên Journey Post dùng cùng business rule. Không thêm notification riêng
-cho Journey, comment-like, save, Messaging hoặc chức năng chưa tồn tại. Database vẫn
-loại tương tác với nội dung của chính mình.
+Các loại hiện có là `follow`, `like`, `comment`, `comment_like`, `reply`.
+Migration `012_comment_interaction_notifications.sql` bổ sung thông báo cho tác giả
+bình luận khi có người thích hoặc trả lời, bao gồm tương tác từ chủ bài viết.
+Reply vẫn thông báo cho chủ bài viết nếu đây là một người nhận khác; nếu chủ bài cũng
+là tác giả bình luận cha thì chỉ nhận một thông báo `reply`. Tự thích/tự trả lời không
+thông báo cho chính người thao tác. Like/comment trên Journey Post dùng cùng business rule.
+Không thêm notification riêng cho Journey, save hoặc Messaging.
 
 ## Persist → Commit → Emit
 
@@ -49,7 +52,7 @@ Namespace/path/auth giữ nguyên Step 1: `/realtime`, `/socket.io`, `auth: { to
 interface NotificationChangedEvent {
   notification_id: string; // UUID thật của notifications, ổn định
   recipient_id: string;
-  type: 'follow' | 'like' | 'comment';
+  type: 'follow' | 'like' | 'comment' | 'comment_like' | 'reply';
   change: 'created' | 'read' | 'deleted';
 }
 ```
@@ -71,7 +74,7 @@ listener sẵn sàng; listener hỏng dù socket còn sống sẽ bật lại fa
 - Không tự mark-all khi mở danh sách. Có nút **Đánh dấu tất cả đã đọc**; nhấn một row
   đánh dấu nhóm đó rồi điều hướng theo thao tác người dùng. Event mới không điều hướng.
 - `POST /api/v1/notifications/read` nhận `{ group_id: string }`, trả `{ updated: number }`.
-  `group_id` chính là ID trong DTO list: UUID cho follow; `like:<post UUID>` hoặc
+  `group_id` chính là ID trong DTO list: UUID cho follow/comment-like/reply; `like:<post UUID>` hoặc
   `comment:<post UUID>`. Server lọc recipient từ JWT, unread và post visibility.
   Request đến nhóm không thuộc viewer trả `updated: 0`; retry idempotent.
 - `POST /notifications/read-all` tiếp tục hợp đồng cũ. Cả hai mutation phát thay đổi
@@ -115,10 +118,16 @@ npm run db:migrate
 npm run db:migrate:status
 ```
 
-Áp dụng cả `010` và `011`; không chỉnh sửa migration đã áp dụng. Migration không xóa
+Áp dụng `010`, `011` và `012`; không chỉnh sửa migration đã áp dụng. Migration không xóa
 dữ liệu cũ. Unique index chỉ áp dụng các key mới không null; tạo index có thể giữ lock
 trên bảng comments trong thời gian migration, cần lên lịch phù hợp với bảng lớn.
-Đã thử migration và nghiệp vụ trên database PostGIS tạm; không tự áp dụng vào DB ứng dụng.
+Kiểm thử migration/nghiệp vụ sử dụng database PostGIS tạm, tách biệt với DB ứng dụng.
+
+`012` không tạo lại thông báo cho tương tác cũ. Comment-like/reply giữ mỗi notification
+thành một dòng riêng, dùng UUID ổn định để đọc/dedup, hiển thị nội dung tiếng Việt tương
+ứng và mở bài viết khi người nhận nhấn. Bỏ thích xóa notification comment-like; xóa
+bình luận/bài viết xóa notification liên quan qua FK cascade. Unique indexes và khóa
+request hiện có ngăn thông báo trùng khi retry. Luồng sau commit của `010` được tái sử dụng.
 
 Không có dependency hoặc environment variable bắt buộc mới. Cấu hình socket vẫn theo
 Step 1 (`NEXT_PUBLIC_REALTIME_URL`, `CORS_ORIGINS`, HTTPS/proxy upgrade). Cần thêm một
@@ -170,16 +179,19 @@ npm run type-check
 npm run build
 ```
 
-Kết quả kiểm tra: backend type-check/lint/build, **142 unit/integration tests** và
-**1 health e2e** pass; frontend type-check/build và **60 Node tests** pass. Build frontend
-còn 6 warnings hiện hữu ngoài phần thay đổi. **9 PostgreSQL/PostGIS tests thật** pass,
+Kết quả sau bổ sung tương tác bình luận: backend type-check/lint/build và
+**144 unit/integration tests** pass; frontend type-check/build và **76 Node tests** pass.
+Build frontend còn 6 warnings hiện hữu ngoài phần thay đổi. **14 PostgreSQL/PostGIS tests thật** pass,
 bao gồm actual commit/rollback, 6 comment retries đồng thời, listener/gateway thật,
 hai tab người nhận, HTTP mark read và lỗi Socket.IO không làm mất dữ liệu đã commit.
-Database tạm đã được dọn sau kiểm thử; DB ứng dụng không bị thay đổi.
+Database tạm được dọn sau kiểm thử. Migration `012` đã áp dụng vào database local;
+không bổ sung dữ liệu thông báo cho các tương tác trước migration.
 
-Chrome smoke trên production build cũng **pass 4 kiểm tra**: event cập nhật badge
+Chrome smoke trên production build cũng **pass 10 kiểm tra**, gồm: event cập nhật badge
 không reload/chuyển trang; popover highlight unread và không tự mark-read; mark-all
-qua REST đưa badge về 0; mobile 390 px không tràn ngang. REST/Socket.IO trong browser
+qua REST đưa badge về 0; mobile 390 px không tràn ngang; nội dung/đường dẫn thích và
+trả lời bình luận; reconnect/foreground đồng bộ REST và logout giữa các tab.
+REST/Socket.IO trong browser
 smoke dùng fixtures; phần DB/commit/delivery thật được kiểm tra riêng trong suite trên.
 Chạy `tests/notifications.browser.mjs` khi Next production server local đang chạy và
 đã đặt `WANDERMAP_TEST_WEB_URL` tương ứng. Runner cần Chrome, Node 22 và dependencies
@@ -187,7 +199,7 @@ cả hai app; không ghi database và không gọi API mutation thật.
 
 ## File thay đổi chính
 
-- Backend: migrations `010`, `011`; `database.service.ts`; notification event/parser,
+- Backend: migrations `010`, `011`, `012`; `database.service.ts`; notification event/parser,
   listener, DTO read, service/controller/module; gateway/module và tests tương ứng.
 - Idempotency: comment DTO/service/unit tests; frontend comment input, types/API và
   các component gửi comment/reply.

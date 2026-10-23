@@ -27,7 +27,7 @@ const channel = 'wandermap_notifications';
 interface NotificationChange {
   notification_id: string;
   recipient_id: string;
-  type: 'follow' | 'like' | 'comment';
+  type: NotificationChangedEvent['type'];
   change: 'created' | 'read' | 'deleted';
 }
 
@@ -40,6 +40,7 @@ describeDatabase('Realtime notifications: real PostgreSQL commit, triggers and r
   const recipients = new Set<string>();
   const actor = randomUUID();
   const owner = randomUUID();
+  const third = randomUUID();
   const locations = [randomUUID(), randomUUID()];
   let post: string;
 
@@ -55,9 +56,9 @@ describeDatabase('Realtime notifications: real PostgreSQL commit, triggers and r
     while (changes.length < count && Date.now() < deadline) await pause(10);
     expect(changes).toHaveLength(count);
   }
-  const notificationRows = async () => (await db.query<{
+  const notificationRows = async (recipient = owner) => (await db.query<{
     id: string; recipient_id: string; actor_id: string; type: NotificationChange['type']; read_at: Date | null;
-  }>('SELECT id, recipient_id, actor_id, type, read_at FROM notifications WHERE recipient_id = $1 ORDER BY created_at, id', [owner])).rows;
+  }>('SELECT id, recipient_id, actor_id, type, read_at FROM notifications WHERE recipient_id = $1 ORDER BY created_at, id', [recipient])).rows;
   const like = () => db.query('INSERT INTO likes (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [actor, post]);
   const follow = () => db.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [actor, owner]);
   async function comment(author = actor, parent: string | null = null) {
@@ -83,7 +84,7 @@ describeDatabase('Realtime notifications: real PostgreSQL commit, triggers and r
       const files = (await readdir(directory)).filter((name) => /^\d+_[a-z0-9_-]+\.sql$/i.test(name)).sort();
       expect(files).toContain('010_notifications_realtime.sql');
       for (const file of files) await db.query(await readFile(path.join(directory, file), 'utf8'));
-      for (const [id, name] of [[actor, 'notify_actor'], [owner, 'notify_owner']]) {
+      for (const [id, name] of [[actor, 'notify_actor'], [owner, 'notify_owner'], [third, 'notify_third']]) {
         recipients.add(id);
         await db.query('INSERT INTO users (id, email) VALUES ($1, $2)', [id, `${id}@example.test`]);
         await db.query('INSERT INTO profiles (id, username, display_name) VALUES ($1, $2, $2)', [id, name]);
@@ -189,10 +190,104 @@ describeDatabase('Realtime notifications: real PostgreSQL commit, triggers and r
     await comment(owner);
     await db.query('INSERT INTO likes (user_id, post_id) VALUES ($1, $2)', [owner, post]);
     await db.query('INSERT INTO saves (user_id, post_id) VALUES ($1, $2)', [actor, post]);
-    await db.query('INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2)', [owner, parent]);
+    await db.query('INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2)', [actor, parent]);
     await pause();
     expect(changes).toHaveLength(2);
     expect(await notificationRows()).toHaveLength(2);
+  });
+
+  it('notifies the comment author when the post owner likes and replies, only after commit', async () => {
+    const parent = await comment();
+    await delivered(1);
+    changes.length = 0;
+    await db.query('BEGIN');
+    try {
+      await db.query('INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [owner, parent]);
+      const reply = await comment(owner, parent);
+      const rows = await notificationRows(actor);
+      expect(rows.map((row) => row.type).sort()).toEqual(['comment_like', 'reply']);
+      expect(rows.every((row) => row.actor_id === owner && row.read_at === null)).toBe(true);
+      expect((await db.query('SELECT comment_id FROM notifications WHERE type = $1', ['reply'])).rows[0].comment_id).toBe(reply);
+      await pause();
+      expect(changes).toHaveLength(0);
+      await db.query('COMMIT');
+      await delivered(2);
+      expect(changes.every((change) => change.recipient_id === actor && change.change === 'created')).toBe(true);
+      expect(await notificationRows()).toHaveLength(1); // No self notification for the post owner.
+    } finally { await db.query('ROLLBACK'); }
+  });
+
+  it('keeps comment likes and reply request retries idempotent and removes unlike notifications', async () => {
+    const parent = await comment();
+    await delivered(1);
+    changes.length = 0;
+    const requestId = randomUUID();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await db.query('INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [owner, parent]);
+      await db.query(`INSERT INTO comments (post_id, author_id, parent_id, content, client_request_id)
+        VALUES ($1, $2, $3, 'Cảm ơn bạn!', $4)
+        ON CONFLICT (author_id, client_request_id) WHERE client_request_id IS NOT NULL DO NOTHING`, [post, owner, parent, requestId]);
+    }
+    await delivered(2);
+    const rows = await notificationRows(actor);
+    expect(rows).toHaveLength(2);
+    const liked = rows.find((row) => row.type === 'comment_like')!;
+    await db.query('DELETE FROM comment_likes WHERE user_id = $1 AND comment_id = $2', [owner, parent]);
+    await db.query('DELETE FROM comment_likes WHERE user_id = $1 AND comment_id = $2', [owner, parent]);
+    await delivered(3);
+    expect(changes[2]).toEqual({ notification_id: liked.id, recipient_id: actor, type: 'comment_like', change: 'deleted' });
+    expect((await notificationRows(actor)).map((row) => row.type)).toEqual(['reply']);
+  });
+
+  it('does not persist or emit comment-interaction notifications on rollback', async () => {
+    const parent = await comment();
+    await delivered(1);
+    changes.length = 0;
+    await db.query('BEGIN');
+    await db.query('INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2)', [owner, parent]);
+    await comment(owner, parent);
+    expect(await notificationRows(actor)).toHaveLength(2);
+    await db.query('ROLLBACK');
+    await pause();
+    expect(await notificationRows(actor)).toHaveLength(0);
+    expect(changes).toHaveLength(0);
+  });
+
+  it('notifies distinct post and parent authors, but never twice when they are the same person', async () => {
+    const parent = await comment();
+    await delivered(1);
+    changes.length = 0;
+    await comment(third, parent);
+    await delivered(2);
+    expect(changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ recipient_id: actor, type: 'reply' }),
+      expect.objectContaining({ recipient_id: owner, type: 'comment' }),
+    ]));
+    const ownerParent = await comment(owner);
+    changes.length = 0;
+    await comment(actor, ownerParent);
+    await delivered(1);
+    expect(changes[0]).toMatchObject({ recipient_id: owner, type: 'reply' });
+    changes.length = 0;
+    await comment(owner, ownerParent);
+    await db.query('INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2)', [owner, ownerParent]);
+    await pause();
+    expect(changes).toHaveLength(0);
+  });
+
+  it('notifies the author of a liked reply and cascades notifications when its parent is deleted', async () => {
+    const parent = await comment();
+    const reply = await comment(owner, parent);
+    await db.query('INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2)', [actor, reply]);
+    await delivered(3);
+    expect(changes[2]).toMatchObject({ recipient_id: owner, type: 'comment_like' });
+    const ids = changes.map((change) => change.notification_id).sort();
+    await db.query('DELETE FROM comments WHERE id = $1', [parent]);
+    await delivered(6);
+    expect(changes.slice(3).every((change) => change.change === 'deleted')).toBe(true);
+    expect(changes.slice(3).map((change) => change.notification_id).sort()).toEqual(ids);
+    expect(await notificationRows(actor)).toHaveLength(0);
+    expect(await notificationRows()).toHaveLength(0);
   });
 
   it('creates one comment and notification for concurrent retries with one request ID', async () => {
@@ -364,6 +459,52 @@ describeDatabase('Realtime notifications: real PostgreSQL commit, triggers and r
       await request(app.getHttpServer()).get('/api/v1/notifications/unread-count')
         .set('Authorization', `Bearer ${ownerToken}`).expect(200, { count: 1 });
       expect(received).toEqual([[createdEvent, readEvent], [createdEvent, readEvent], []]);
+
+      emit.mockRestore();
+      warning.mockRestore();
+      const parent = await comment();
+      deadline = Date.now() + 3000;
+      while ((received[0].length < 3 || received[1].length < 3) && Date.now() < deadline) await pause(10);
+      expect(received[0]).toHaveLength(3);
+      expect(received[1]).toHaveLength(3);
+      received.forEach((events) => { events.length = 0; });
+      await db.query('BEGIN');
+      await db.query('INSERT INTO comment_likes (user_id, comment_id) VALUES ($1, $2)', [owner, parent]);
+      await comment(owner, parent);
+      await pause();
+      expect(received).toEqual([[], [], []]);
+      await db.query('COMMIT');
+      deadline = Date.now() + 3000;
+      while (received[2].length < 2 && Date.now() < deadline) await pause(10);
+      expect(received.slice(0, 2)).toEqual([[], []]);
+      expect(received[2].map((event) => event.type).sort()).toEqual(['comment_like', 'reply']);
+      expect(received[2].every((event) => event.recipient_id === actor && event.change === 'created')).toBe(true);
+      const actorToken = token(actor);
+      await request(app.getHttpServer()).get('/api/v1/notifications/unread-count')
+        .set('Authorization', `Bearer ${actorToken}`).expect(200, { count: 2 });
+      const list = await request(app.getHttpServer()).get('/api/v1/notifications')
+        .set('Authorization', `Bearer ${actorToken}`).expect(200);
+      expect(list.body.data).toHaveLength(2);
+      expect(list.body.data.map((item: { type: string }) => item.type).sort()).toEqual(['comment_like', 'reply']);
+      for (const item of list.body.data) {
+        expect(item).toMatchObject({ post: { id: post }, is_unread: true, actor_count: 1 });
+        expect(item.actors[0].id).toBe(owner);
+        await request(app.getHttpServer()).post('/api/v1/notifications/read')
+          .set('Authorization', `Bearer ${ownerToken}`).send({ group_id: item.id }).expect(200, { updated: 0 });
+        await request(app.getHttpServer()).post('/api/v1/notifications/read')
+          .set('Authorization', `Bearer ${actorToken}`).send({ group_id: item.id }).expect(200, { updated: 1 });
+        await request(app.getHttpServer()).post('/api/v1/notifications/read')
+          .set('Authorization', `Bearer ${actorToken}`).send({ group_id: item.id }).expect(200, { updated: 0 });
+      }
+      deadline = Date.now() + 3000;
+      while (received[2].length < 4 && Date.now() < deadline) await pause(10);
+      expect(received[2].slice(2).map((event) => event.change)).toEqual(['read', 'read']);
+      await request(app.getHttpServer()).get('/api/v1/notifications/unread-count')
+        .set('Authorization', `Bearer ${actorToken}`).expect(200, { count: 0 });
+      await db.query("UPDATE posts SET visibility = 'private' WHERE id = $1", [post]);
+      const hidden = await request(app.getHttpServer()).get('/api/v1/notifications')
+        .set('Authorization', `Bearer ${actorToken}`).expect(200);
+      expect(hidden.body.data).toEqual([]);
     } finally {
       emit?.mockRestore();
       warning?.mockRestore();

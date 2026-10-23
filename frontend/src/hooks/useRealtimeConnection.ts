@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { createSocketClient } from "@/lib/realtime/socket-client";
 import { realtimeSession } from "@/lib/realtime/session";
+import { observeBrowserResume } from "@/lib/realtime/browser-resume";
 import { QUERY_KEYS } from "@/constants";
 import { getAccessToken, refreshAccessToken, subscribeAccessToken } from "@/lib/api/client";
 import { createRealtimeLifecycle } from "@/lib/realtime/lifecycle";
@@ -30,6 +31,7 @@ export function useRealtimeConnection() {
       createSocket: createSocketClient(origin),
       getToken: getAccessToken,
       refreshToken: refreshAccessToken,
+      onPhaseChange: (phase) => useRealtimeStore.getState().setPhase(phase),
       onConnectionChange: (userId, connected) => {
         useRealtimeStore.getState().setConnection(userId, connected);
         // Close the short polling-to-socket gap; no replay/cursor recovery protocol.
@@ -52,9 +54,15 @@ export function useRealtimeConnection() {
       queryClient.removeQueries({ queryKey: QUERY_KEYS.notifications.all });
     });
     lifecycle.setUser(useAuthStore.getState().user?.id ?? null);
+    const stopResume = observeBrowserResume(() => {
+      lifecycle.resume();
+      const owner = useAuthStore.getState().user?.id;
+      if (owner) notifications.refresh(owner);
+    }, () => lifecycle.offline());
 
     return () => {
       unsubscribeToken();
+      stopResume();
       unsubscribeAuth();
       lifecycle.dispose();
       notifications.dispose();

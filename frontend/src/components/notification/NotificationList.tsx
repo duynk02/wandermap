@@ -18,6 +18,8 @@ import { NotificationMessage } from "./NotificationMessage";
 const TYPE_ICON = {
   like: { Icon: Heart, className: "bg-red-500" },
   comment: { Icon: MessageCircle, className: "bg-brand-500" },
+  comment_like: { Icon: Heart, className: "bg-red-500" },
+  reply: { Icon: MessageCircle, className: "bg-brand-500" },
   follow: { Icon: UserPlus, className: "bg-blue-500" },
 } as const;
 
@@ -95,7 +97,7 @@ export function NotificationList({ variant = "page", onNavigate }: NotificationL
     getNextPageParam: (last, pages) => (last.hasMore ? pages.length + 1 : undefined),
     enabled: isAuthenticated,
     refetchInterval: realtimeHealthy ? false : 30_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false, // Owned by the throttled realtime visibility observer.
   });
 
   const items = (query.data?.pages ?? []).flatMap((page) => page.data).filter(

@@ -19,7 +19,7 @@ export function useUnreadNotificationCount(): number {
     queryFn: async ({ signal }) => (await getUnreadNotificationCount(signal)).count,
     enabled: isAuthenticated,
     refetchInterval: connected ? false : 30_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false, // Central visibility reconciliation is throttled per tab.
     staleTime: 10_000,
   });
   return isAuthenticated ? (data ?? 0) : 0;

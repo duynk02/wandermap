@@ -19,7 +19,7 @@ function setup() {
 }
 
 describe('Notification database event contract', () => {
-  it.each(['follow', 'like', 'comment'])('accepts supported %s changes and strips unknown fields', (type) => {
+  it.each(['follow', 'like', 'comment', 'comment_like', 'reply'])('accepts supported %s changes and strips unknown fields', (type) => {
     for (const operation of ['created', 'read', 'deleted']) {
       const expected = { ...change, type, change: operation };
       expect(parseNotificationChange(JSON.stringify({ ...expected, accessToken: 'private', content: 'not an event field' }))).toEqual(expected);
@@ -89,13 +89,13 @@ describe('NotificationsService REST ownership and unread state', () => {
     expect(await service.unreadCount(USER)).toEqual({ count: 0 });
   });
 
-  it('marks only an unread follow belonging to the viewer, with visibility enforced in SQL', async () => {
+  it('marks only an unread individual notification belonging to the viewer, with visibility enforced in SQL', async () => {
     const { service, query } = setup();
     query.mockResolvedValueOnce({ rowCount: 1 });
     expect(await service.markRead(USER, ID)).toEqual({ updated: 1 });
     const [sql, values] = query.mock.calls[0];
     expect(sql).toContain('n.recipient_id = $1');
-    expect(sql).toContain("n.type = 'follow'");
+    expect(sql).toContain("n.type IN ('follow', 'comment_like', 'reply')");
     expect(sql).toContain('n.id = $2::uuid');
     expect(sql).toContain('n.read_at IS NULL');
     expect(sql).toContain('pu.is_active = true');

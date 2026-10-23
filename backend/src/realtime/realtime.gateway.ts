@@ -9,6 +9,7 @@ import type { NotificationChangedEvent } from '../notifications/notification-eve
 interface LifecycleEvents {
   'auth:expired': (payload: Record<string, never>) => void;
   'auth:invalidated': (payload: Record<string, never>) => void;
+  'auth:unavailable': (payload: Record<string, never>) => void;
   'notification:changed': (payload: NotificationChangedEvent) => void;
   'notifications:status': (payload: { available: boolean }) => void;
 }
@@ -104,14 +105,16 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     if (!client.connected || this.closing || !user) return;
     if (user.exp * 1000 <= Date.now()) { this.endConnection(client, 'auth:expired'); return; }
     try { await this.accessTokens.assertActive(user.sub); }
-    catch { this.endConnection(client, 'auth:invalidated'); return; }
+    catch (error: unknown) {
+      this.endConnection(client, error instanceof AccessTokenError ? 'auth:invalidated' : 'auth:unavailable'); return;
+    }
     const timers = this.timers.get(client.id);
     if (!client.connected || this.closing || !timers) return;
     timers.validation = setTimeout(() => void this.revalidate(client), 30_000);
     timers.validation.unref();
   }
 
-  private endConnection(client: RealtimeSocket, event: 'auth:expired' | 'auth:invalidated'): void {
+  private endConnection(client: RealtimeSocket, event: 'auth:expired' | 'auth:invalidated' | 'auth:unavailable'): void {
     // Clients cannot use lifecycle signals to join rooms or mutate notification state.
     client.emit(event, {});
     client.disconnect(true);

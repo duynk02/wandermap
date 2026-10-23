@@ -12,6 +12,8 @@ export function createSocketClient(origin: string): (token: string) => Socket {
       reconnection: true,
       reconnectionDelay: 1_000,
       reconnectionDelayMax: 10_000,
+      randomizationFactor: 0.5,
+      timeout: 10_000,
       forceNew: true,
     });
     socket.receiveBuffer = [];

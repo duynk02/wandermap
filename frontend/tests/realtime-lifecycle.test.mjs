@@ -196,3 +196,52 @@ test("expired refresh cookie or refresh network error leaves the socket closed",
     harness.lifecycle.dispose();
   }
 });
+
+test("temporary namespace failure retries with backoff and logout cancels pending retries", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const harness = setup();
+  harness.lifecycle.setUser("user-a");
+  harness.sockets[0].socket.emitServer("connect_error", { data: { code: "SERVICE_UNAVAILABLE" } });
+  assert.equal(harness.sockets.length, 1);
+  t.mock.timers.tick(999);
+  assert.equal(harness.sockets.length, 1);
+  t.mock.timers.tick(501);
+  assert.equal(harness.sockets.length, 2);
+  harness.sockets[1].socket.emitServer("auth:unavailable");
+  harness.setToken(null); harness.lifecycle.setUser(null);
+  t.mock.timers.tick(60_000);
+  assert.equal(harness.sockets.length, 2);
+  harness.lifecycle.dispose();
+});
+
+test("refresh network outage retries, whereas a revoked session remains stopped", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let attempts = 0;
+  const harness = setup(async () => { attempts++; throw new Error("offline"); });
+  harness.lifecycle.setUser("user-a");
+  harness.sockets[0].socket.emitServer("auth:expired");
+  await tick();
+  assert.equal(attempts, 1);
+  assert.equal(harness.sockets.length, 1);
+  t.mock.timers.tick(1500);
+  assert.equal(harness.sockets.length, 2);
+  harness.sockets[1].socket.emitServer("connect_error", expired);
+  await tick();
+  assert.equal(attempts, 2);
+  harness.lifecycle.dispose();
+  t.mock.timers.tick(60_000);
+  assert.equal(harness.sockets.length, 2);
+});
+
+test("network disconnect leaves retry ownership with the existing Manager", () => {
+  const phases = [];
+  const harness = setup(async () => null, { onPhaseChange: (phase) => phases.push(phase) });
+  harness.lifecycle.setUser("user-a");
+  const socket = harness.sockets[0].socket;
+  socket.emitServer("connect"); socket.emitServer("disconnect", "transport close");
+  for (let i = 0; i < 10; i++) harness.lifecycle.resume();
+  assert.equal(harness.sockets.length, 1);
+  socket.emitServer("connect");
+  assert.equal(phases.at(-1), "connected");
+  harness.lifecycle.dispose();
+});

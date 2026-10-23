@@ -269,7 +269,7 @@ describe('Realtime gateway authentication and room isolation (integration)', () 
     const socket = client({ token: await token() });
     await connect(socket);
     const serverSocket = gateway.server.sockets.get(socket.id!)!;
-    const invalidated = event(socket, 'auth:invalidated');
+    const invalidated = event(socket, condition === 'disabled account' ? 'auth:invalidated' : 'auth:unavailable');
     const disconnected = event(socket, 'disconnect');
     if (condition === 'disabled account') query.mockResolvedValueOnce({ rows: [{ is_active: false }], rowCount: 1 });
     else query.mockRejectedValueOnce(new Error('Database unavailable.'));

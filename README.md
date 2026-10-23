@@ -230,7 +230,7 @@ Mở **http://localhost:3000**. Nếu thay `API_INTERNAL_URL`, restart hoặc re
 | Profile | Trang hồ sơ, chỉ số, bản đồ cá nhân; `PATCH /users/me` hỗ trợ tên, avatar URL và bio | Form chỉnh sửa đầy đủ, cover, username, website còn là kế hoạch |
 | Travel map & Journey | Visited/wishlist, lịch sử ghé thăm; bản đồ Profile/bộ lọc/thống kê; Journey Builder nháp/công khai; xuất poster PNG 1:1 và 4:5 | Journey Post và Travel Passport chưa có |
 | Itineraries | Backend có API itinerary và itinerary stops | Không đồng nghĩa đã có trình dựng hành trình drag-and-drop trên frontend |
-| Notifications | Socket.IO sau commit; REST danh sách/unread/đánh dấu nhóm hoặc tất cả; chuông và danh sách đồng bộ nhiều tab | REST là nguồn dữ liệu chuẩn; fallback polling khi realtime không sẵn sàng, chưa có replay bền vững |
+| Notifications | Follow, thích/bình luận bài viết, thích/trả lời bình luận; Socket.IO sau commit; REST danh sách/unread/đánh dấu nhóm hoặc tất cả; đồng bộ nhiều tab | REST là nguồn dữ liệu chuẩn; fallback polling khi realtime không sẵn sàng, chưa có replay bền vững |
 | Upload ảnh | API `POST /uploads/images` và xử lý ảnh WebP | Lưu local disk; cần kế hoạch storage bền vững khi deploy nhiều instance |
 
 ### Trang / luồng chính
@@ -284,6 +284,7 @@ Migrations chính nằm tại `backend/src/database/migrations/`:
 009_journey_posts.sql
 010_notifications_realtime.sql
 011_comment_request_id.sql
+012_comment_interaction_notifications.sql
 ```
 
 Phase 2 Step 3 đã mở rộng tab bản đồ Profile với danh sách, bộ lọc, thống kê và
@@ -334,7 +335,7 @@ Roadmap là **kế hoạch**, không phải các tính năng được xác nhậ
 - [x] Gateway Socket.IO và JWT, room riêng theo user, lifecycle auth; [Phase 3 Step 1](docs/phase-3-step-1.md).
 - [x] Gửi thay đổi thông báo sau commit đến đúng người dùng, cập nhật unread badge qua REST; [Feature 2](docs/phase-3-step-2.md).
 - [x] Socket client dùng chung mỗi tab, Strict Mode cleanup, auth lifecycle và TanStack Query; [Feature 3](docs/phase-3-step-3.md).
-- [ ] Reconnect, đồng bộ lại qua REST API để không bỏ sót sự kiện.
+- [x] Reconnect/backoff, phục hồi auth và đối soát REST sau gián đoạn/foreground; [Feature 4](docs/phase-3-step-4.md).
 - [ ] Đánh giá Redis adapter nếu backend chạy nhiều instance.
 
 ### Phase 4 — Messaging & Social Connections

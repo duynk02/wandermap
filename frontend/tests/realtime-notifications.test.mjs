@@ -44,6 +44,11 @@ test("new/read events refresh every loaded infinite-query page and preserve page
 
 test("notification payloads accept only known types/changes and valid identities", () => {
   assert.deepEqual(parseNotificationChanged(event()), event());
+  for (const type of ["comment_like", "reply"]) {
+    for (const change of ["created", "read", "deleted"]) {
+      assert.deepEqual(parseNotificationChanged(event({ type, change })), event({ type, change }));
+    }
+  }
   for (const payload of [null, [], event({ notification_id: "like:post-id" }), event({ recipient_id: "bad" }), event({ type: "message" }), event({ change: "unknown" })]) {
     assert.equal(parseNotificationChanged(payload), null);
   }

@@ -5,7 +5,7 @@ Backend độc lập cho WanderMap, xây dựng bằng NestJS + TypeScript + Pos
 Phase 3 Step 1 bổ sung Socket.IO namespace `/realtime` trên cùng HTTP server, JWT
 middleware và room riêng theo user. Xem [contract, lifecycle và cấu hình triển khai](../docs/phase-3-step-1.md).
 Feature 2 phát thay đổi notification sau commit qua PostgreSQL LISTEN/NOTIFY và socket;
-frontend refetch REST cho list/unread. Áp dụng migrations 010–011 trước khi chạy phiên
+frontend refetch REST cho list/unread. Áp dụng migrations 010–012 trước khi chạy phiên
 bản mới; xem [contract, triển khai và kiểm thử](../docs/phase-3-step-2.md). Recovery/replay
 chưa triển khai.
 
