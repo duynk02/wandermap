@@ -230,7 +230,7 @@ Mở **http://localhost:3000**. Nếu thay `API_INTERNAL_URL`, restart hoặc re
 | Profile | Trang hồ sơ, chỉ số, bản đồ cá nhân; `PATCH /users/me` hỗ trợ tên, avatar URL và bio | Form chỉnh sửa đầy đủ, cover, username, website còn là kế hoạch |
 | Travel map & Journey | Visited/wishlist, lịch sử ghé thăm; bản đồ Profile/bộ lọc/thống kê; Journey Builder nháp/công khai; xuất poster PNG 1:1 và 4:5 | Journey Post và Travel Passport chưa có |
 | Itineraries | Backend có API itinerary và itinerary stops | Không đồng nghĩa đã có trình dựng hành trình drag-and-drop trên frontend |
-| Notifications | Backend API danh sách/chưa đọc/đánh dấu tất cả; frontend có chuông và danh sách | Frontend hiện polling unread mỗi 30 giây, **chưa phải Socket.IO realtime** |
+| Notifications | Socket.IO sau commit; REST danh sách/unread/đánh dấu nhóm hoặc tất cả; chuông và danh sách đồng bộ nhiều tab | REST là nguồn dữ liệu chuẩn; fallback polling khi realtime không sẵn sàng, chưa có replay bền vững |
 | Upload ảnh | API `POST /uploads/images` và xử lý ảnh WebP | Lưu local disk; cần kế hoạch storage bền vững khi deploy nhiều instance |
 
 ### Trang / luồng chính
@@ -262,7 +262,7 @@ Backend định nghĩa global prefix **`/api/v1`**; xem toàn bộ contract, DTO
 | Posts | `GET /posts/feed`, `/posts/following`, `/posts/:id`; `POST/PATCH/DELETE /posts` theo quyền |
 | Engagement | `POST/DELETE /posts/:id/like`, `/posts/:id/save` |
 | Comments | `GET/POST /posts/:postId/comments`, replies và thao tác sửa/xóa/like bình luận |
-| Notifications | `GET /notifications`, `/notifications/unread-count`; `POST /notifications/read-all` |
+| Notifications | `GET /notifications`, `/notifications/unread-count`; `POST /notifications/read`, `/notifications/read-all` |
 | Itineraries | `GET/POST /itineraries`, quản lý `/itineraries/:id/stops` |
 | Uploads | `POST /uploads/images` |
 
@@ -281,6 +281,9 @@ Migrations chính nằm tại `backend/src/database/migrations/`:
 006_profile_editing.sql
 007_travel_map_journeys.sql
 008_visited_locations_cutover.sql
+009_journey_posts.sql
+010_notifications_realtime.sql
+011_comment_request_id.sql
 ```
 
 Phase 2 Step 3 đã mở rộng tab bản đồ Profile với danh sách, bộ lọc, thống kê và
@@ -329,7 +332,7 @@ Roadmap là **kế hoạch**, không phải các tính năng được xác nhậ
 ### Phase 3 — Realtime Notifications
 
 - [x] Gateway Socket.IO và JWT, room riêng theo user, lifecycle auth; [Phase 3 Step 1](docs/phase-3-step-1.md).
-- [ ] Gửi thông báo mới đến đúng người dùng, cập nhật unread badge realtime.
+- [x] Gửi thay đổi thông báo sau commit đến đúng người dùng, cập nhật unread badge qua REST; [Feature 2](docs/phase-3-step-2.md).
 - [ ] Reconnect, đồng bộ lại qua REST API để không bỏ sót sự kiện.
 - [ ] Đánh giá Redis adapter nếu backend chạy nhiều instance.
 

@@ -6,6 +6,9 @@ interface RealtimeDependencies {
   createSocket: (token: string) => RealtimeSocket;
   getToken: () => string | null;
   refreshToken: () => Promise<string | null>;
+  onConnectionChange?: (userId: string | null, connected: boolean) => void;
+  onNotification?: (userId: string, payload: unknown) => void;
+  onNotificationStatus?: (userId: string, payload: unknown) => void;
 }
 
 /** Owner consistency only; the gateway independently verifies the JWT signature and user. */
@@ -22,8 +25,8 @@ export function accessTokenSubject(token: string): string | null {
   }
 }
 
-/** Owns one authenticated transport. Notification delivery and recovery belong to later steps. */
-export function createRealtimeLifecycle({ createSocket, getToken, refreshToken }: RealtimeDependencies) {
+/** Owns one authenticated transport; notification business logic stays outside the socket. */
+export function createRealtimeLifecycle({ createSocket, getToken, refreshToken, onConnectionChange, onNotification, onNotificationStatus }: RealtimeDependencies) {
   let userId: string | null = null;
   let socket: RealtimeSocket | null = null;
   let tokenUsed: string | null = null;
@@ -39,6 +42,7 @@ export function createRealtimeLifecycle({ createSocket, getToken, refreshToken }
     tokenUsed = null;
     previous?.removeAllListeners();
     previous?.disconnect();
+    onConnectionChange?.(userId, false);
   };
 
   const connect = () => {
@@ -76,7 +80,18 @@ export function createRealtimeLifecycle({ createSocket, getToken, refreshToken }
     };
 
     next.on("connect", () => {
-      if (socket === next) refreshAttempted = false;
+      if (socket !== next) return;
+      refreshAttempted = false;
+      onConnectionChange?.(userId, true);
+    });
+    next.on("disconnect", () => {
+      if (socket === next) onConnectionChange?.(userId, false);
+    });
+    next.on("notification:changed", (payload: unknown) => {
+      if (socket === next && userId) onNotification?.(userId, payload);
+    });
+    next.on("notifications:status", (payload: unknown) => {
+      if (socket === next && userId) onNotificationStatus?.(userId, payload);
     });
     next.on("connect_error", (error: Error & { data?: { code?: string } }) => {
       if (socket !== next) return;
@@ -103,6 +118,7 @@ export function createRealtimeLifecycle({ createSocket, getToken, refreshToken }
       generation += 1;
       disconnect();
       userId = nextUserId;
+      onConnectionChange?.(userId, false);
       refreshing = false;
       refreshAttempted = false;
       invalidated = false;

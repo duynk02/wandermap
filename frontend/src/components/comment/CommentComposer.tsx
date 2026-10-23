@@ -7,21 +7,24 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { COMMENT_MAX_LENGTH } from "@/constants";
 import { cn, getAvatarUrl } from "@/lib/utils";
 import type { PostComment } from "@/types";
+import { createCommentDraft } from "@/lib/comment-input";
 
 interface CommentComposerProps {
+  postId: string;
   /** The top-level comment being answered, or null for a new top-level comment. */
   replyTo: PostComment | null;
   onCancelReply: () => void;
   /** Must reject when sending fails so the text is kept for a retry. */
-  onSubmit: (content: string) => Promise<void>;
+  onSubmit: (content: string, clientRequestId?: string) => Promise<void>;
   isSubmitting: boolean;
 }
 
-export function CommentComposer({ replyTo, onCancelReply, onSubmit, isSubmitting }: CommentComposerProps) {
-  const { isAuthenticated, profile } = useAuth();
+export function CommentComposer({ postId, replyTo, onCancelReply, onSubmit, isSubmitting }: CommentComposerProps) {
+  const { isAuthenticated, profile, user } = useAuth();
   const requireAuth = useRequireAuth();
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const draft = useRef(createCommentDraft());
 
   const trimmed = value.trim();
   const canSend = trimmed.length > 0 && !isSubmitting;
@@ -34,9 +37,14 @@ export function CommentComposer({ replyTo, onCancelReply, onSubmit, isSubmitting
   const submit = async () => {
     if (!requireAuth("Đăng nhập để bình luận")) return;
     if (!canSend) return;
+    const input = draft.current.prepare(`${user?.id}:${postId}:${replyTo?.id ?? "root"}`, {
+      content: trimmed,
+      ...(replyTo ? { parent_id: replyTo.id } : {}),
+    });
     try {
-      await onSubmit(trimmed);
-      setValue("");
+      await onSubmit(trimmed, input.client_request_id);
+      draft.current.succeeded(input.client_request_id);
+      setValue((current) => current.trim() === trimmed ? "" : current);
     } catch {
       /* the caller shows the error; keep the text so the user can retry */
     }
@@ -79,7 +87,7 @@ export function CommentComposer({ replyTo, onCancelReply, onSubmit, isSubmitting
             onFocus={() => {
               if (!isAuthenticated) requireAuth("Đăng nhập để bình luận");
             }}
-            onChange={(event) => setValue(event.target.value)}
+            onChange={(event) => { draft.current.changed(); setValue(event.target.value); }}
             onKeyDown={(event) => {
               if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
                 event.preventDefault();

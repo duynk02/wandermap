@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
+import { NotificationsListener } from '../src/notifications/notifications.listener';
 
 describe('WanderMap API health (e2e)', () => {
   let app: INestApplication;
@@ -23,6 +24,8 @@ describe('WanderMap API health (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(DatabaseService)
       .useValue({ check: jest.fn().mockResolvedValue({ connected: true, latencyMs: 1 }) })
+      .overrideProvider(NotificationsListener)
+      .useValue({})
       .compile();
 
     app = moduleFixture.createNestApplication();

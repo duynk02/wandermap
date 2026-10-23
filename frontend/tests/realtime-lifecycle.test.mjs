@@ -18,7 +18,7 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
 const expired = { data: { code: "TOKEN_EXPIRED" } };
 const jwt = (label, sub = "user-a") => `header.${Buffer.from(JSON.stringify({ sub, label })).toString("base64url")}.signature`;
 
-function setup(refreshToken = async () => null) {
+function setup(refreshToken = async () => null, callbacks = {}) {
   let token = jwt("token-a");
   const sockets = [];
   const lifecycle = createRealtimeLifecycle({
@@ -29,6 +29,7 @@ function setup(refreshToken = async () => null) {
     },
     getToken: () => token,
     refreshToken,
+    ...callbacks,
   });
   return {
     sockets,
@@ -54,6 +55,34 @@ test("only an authenticated owner connects; token replacement and disposal remov
   harness.lifecycle.dispose();
   harness.setToken("too-late");
   assert.equal(harness.sockets.length, 2);
+});
+
+test("connection health and notifications reach only the current socket's owner", () => {
+  const connections = [];
+  const received = [];
+  const statuses = [];
+  const harness = setup(async () => null, {
+    onConnectionChange: (userId, connected) => connections.push({ userId, connected }),
+    onNotification: (userId, payload) => received.push({ userId, payload }),
+    onNotificationStatus: (userId, payload) => statuses.push({ userId, payload }),
+  });
+  harness.lifecycle.setUser("user-a");
+  const socket = harness.sockets[0].socket;
+  socket.emitServer("connect");
+  socket.emitServer("notification:changed", { notification_id: "notification-a" });
+  socket.emitServer("notifications:status", { available: true });
+  assert.deepEqual(connections.at(-1), { userId: "user-a", connected: true });
+  assert.equal(received[0].userId, "user-a");
+  assert.deepEqual(statuses[0], { userId: "user-a", payload: { available: true } });
+  const staleNotification = socket.handlers.get("notification:changed");
+  socket.emitServer("disconnect");
+  assert.deepEqual(connections.at(-1), { userId: "user-a", connected: false });
+  harness.setToken("token-b", "user-b");
+  harness.lifecycle.setUser("user-b");
+  staleNotification({ notification_id: "stale-event" });
+  assert.equal(received.length, 1);
+  harness.lifecycle.dispose();
+  assert.deepEqual(connections.at(-1), { userId: "user-b", connected: false });
 });
 
 test("an expired handshake shares one refresh and never loops when the new JWT is rejected", async () => {

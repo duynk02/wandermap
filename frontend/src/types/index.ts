@@ -221,6 +221,14 @@ export interface PostComment {
   is_liked: boolean;
 }
 
+/** Comment/reply creation; older clients may omit the idempotency key. */
+export interface CreateCommentInput {
+  content: string;
+  parent_id?: string;
+  /** One UUID per user action; retries reuse it to avoid duplicate comments/notifications. */
+  client_request_id?: string;
+}
+
 /** Authoritative counters returned when a comment/reply is created. */
 export interface CreateCommentResult {
   comment: PostComment;

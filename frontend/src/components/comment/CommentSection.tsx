@@ -8,7 +8,8 @@ import { ApiError, createComment, getComments } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { useViewerKey } from "@/hooks/useRequireAuth";
 import { QUERY_KEYS } from "@/constants";
-import type { DeleteCommentResult, PostComment } from "@/types";
+import type { CreateCommentInput, DeleteCommentResult, PostComment } from "@/types";
+import { prepareCommentInput } from "@/lib/comment-input";
 import { flattenComments, patchComment, prependComment, removeComment } from "./comment-cache";
 import { CommentComposer } from "./CommentComposer";
 import { CommentItem } from "./CommentItem";
@@ -51,7 +52,7 @@ export function CommentSection({ postId, postAuthorId, onCommentsCountChange }: 
   const comments = flattenComments(query.data);
 
   const sendMutation = useMutation({
-    mutationFn: (input: { content: string; parent_id?: string }) => createComment(postId, input),
+    mutationFn: (input: CreateCommentInput & { client_request_id: string }) => createComment(postId, input),
     onSuccess: ({ comment, post, parent }) => {
       onCommentsCountChange?.(post.comments_count);
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.byId(postId) });
@@ -99,11 +100,12 @@ export function CommentSection({ postId, postAuthorId, onCommentsCountChange }: 
   return (
     <section aria-label="Bình luận" className="border-t border-border px-4 pb-4 pt-3">
       <CommentComposer
+        postId={postId}
         replyTo={null}
         onCancelReply={() => undefined}
         isSubmitting={sendingFor === null}
-        onSubmit={async (content) => {
-          await sendMutation.mutateAsync({ content });
+        onSubmit={async (content, clientRequestId) => {
+          await sendMutation.mutateAsync(prepareCommentInput({ content, client_request_id: clientRequestId }));
         }}
       />
 
@@ -119,8 +121,8 @@ export function CommentSection({ postId, postAuthorId, onCommentsCountChange }: 
             onReply={setReplyTo}
             isReplying={replyTo?.id === comment.id}
             onCancelReply={() => setReplyTo(null)}
-            onSendReply={async (content) => {
-              await sendMutation.mutateAsync({ content, parent_id: comment.id });
+            onSendReply={async (content, clientRequestId) => {
+              await sendMutation.mutateAsync(prepareCommentInput({ content, parent_id: comment.id, client_request_id: clientRequestId }));
             }}
             isSendingReply={sendingFor === comment.id}
             repliesExpanded={expanded.has(comment.id)}

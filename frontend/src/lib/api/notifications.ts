@@ -12,3 +12,7 @@ export const getUnreadNotificationCount = (signal?: AbortSignal) =>
 /** Requires login. */
 export const markAllNotificationsRead = () =>
   apiFetch<{ updated: number }>("/notifications/read-all", { method: "POST" });
+
+/** Mark one displayed group (a follow UUID or a like/comment post group) as read. */
+export const markNotificationRead = (groupId: string) =>
+  apiFetch<{ updated: number }>("/notifications/read", { method: "POST", body: { group_id: groupId } });

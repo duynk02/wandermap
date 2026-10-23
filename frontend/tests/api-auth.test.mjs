@@ -267,3 +267,19 @@ test("a superseded login cannot publish credentials or return the previous user"
     unsubscribe();
   }
 });
+
+test("HTTP 401 replay keeps the comment idempotency key and request body unchanged", async () => {
+  globalThis.window = {};
+  setAccessToken("expired-token");
+  const input = { content: "Một kỷ niệm", parent_id: "parent-comment", client_request_id: "30000000-0000-4000-8000-000000000001" };
+  const bodies = [];
+  globalThis.fetch = async (url, options) => {
+    if (url.endsWith("/auth/refresh")) return Response.json({ accessToken: "fresh-token" });
+    bodies.push(options.body);
+    return bodies.length === 1 ? new Response(null, { status: 401 }) : Response.json({ comment: { id: "same-comment" } });
+  };
+  await apiFetch("/posts/post-id/comments", { method: "POST", body: input });
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0], bodies[1]);
+  assert.equal(JSON.parse(bodies[1]).client_request_id, input.client_request_id);
+});

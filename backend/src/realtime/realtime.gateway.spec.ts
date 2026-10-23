@@ -291,6 +291,66 @@ describe('Realtime gateway authentication and room isolation (integration)', () 
     expect(a2.connected).toBe(true);
   });
 
+  it('sends a typed notification invalidation to every recipient tab and no other user', async () => {
+    const [a1, a2, b] = [client({ token: await token() }), client({ token: await token() }), client({ token: await token(USER_B) })];
+    await Promise.all([connect(a1), connect(a2), connect(b)]);
+    const change = { notification_id: USER_B, recipient_id: USER_A, type: 'like' as const, change: 'created' as const };
+    const others: unknown[] = [];
+    b.on('notification:changed', (payload: unknown) => others.push(payload));
+    const first = event(a1, 'notification:changed');
+    const second = event(a2, 'notification:changed');
+    const barrier = event(b, 'test:barrier');
+    await gateway.emitNotificationChange(change);
+    gateway.server.emit('test:barrier');
+    expect(await first).toEqual(change);
+    expect(await second).toEqual(change);
+    await barrier;
+    expect(others).toEqual([]);
+    expect(query).toHaveBeenLastCalledWith('SELECT is_active FROM users WHERE id = $1', [USER_A]);
+  });
+
+  it('does not perform private delivery when the recipient is inactive', async () => {
+    const socket = client({ token: await token() });
+    await connect(socket);
+    const received: unknown[] = [];
+    socket.on('notification:changed', (payload: unknown) => received.push(payload));
+    query.mockResolvedValueOnce({ rows: [{ is_active: false }], rowCount: 1 });
+    await expect(gateway.emitNotificationChange({ notification_id: USER_B, recipient_id: USER_A, type: 'comment', change: 'created' })).rejects.toThrow();
+    const barrier = event(socket, 'test:barrier');
+    gateway.server.emit('test:barrier');
+    await barrier;
+    expect(received).toEqual([]);
+  });
+
+  it('rechecks JWT expiry at delivery time even if the expiry timer has not fired', async () => {
+    const socket = client({ token: await token() });
+    await connect(socket);
+    const serverSocket = gateway.server.sockets.get(socket.id!)!;
+    serverSocket.data.user.exp = Math.floor(Date.now() / 1000) - 1;
+    const received: unknown[] = [];
+    socket.on('notification:changed', (payload: unknown) => received.push(payload));
+    const expired = event(socket, 'auth:expired');
+    const disconnected = event(socket, 'disconnect');
+    await gateway.emitNotificationChange({ notification_id: USER_B, recipient_id: USER_A, type: 'like', change: 'created' });
+    await expired;
+    await disconnected;
+    expect(received).toEqual([]);
+    expect(gateway.server.adapter.rooms.has(`user:${USER_A}`)).toBe(false);
+  });
+
+  it('keeps offline notifications in persistent storage without opening user queries for delivery', async () => {
+    await gateway.emitNotificationChange({ notification_id: USER_B, recipient_id: USER_A, type: 'follow', change: 'created' });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('isolates transport status broadcast failures from listener lifecycle', () => {
+    const broadcast = jest.spyOn(gateway.server, 'emit').mockImplementationOnce(() => { throw new Error('Transport unavailable'); });
+    try {
+      expect(() => gateway.setNotificationDeliveryAvailable(true)).not.toThrow();
+      expect(broadcast).toHaveBeenCalledWith('notifications:status', { available: true });
+    } finally { broadcast.mockRestore(); }
+  });
+
   it('disconnects every user and clears private rooms when the gateway shuts down', async () => {
     const [a, b] = [client({ token: await token() }), client({ token: await token(USER_B) })];
     await Promise.all([connect(a), connect(b)]);

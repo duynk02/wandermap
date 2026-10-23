@@ -107,7 +107,7 @@ interface CommentItemProps {
   /** True while the reply box under this comment is open. */
   isReplying?: boolean;
   onCancelReply?: () => void;
-  onSendReply?: (content: string) => Promise<void>;
+  onSendReply?: (content: string, clientRequestId?: string) => Promise<void>;
   isSendingReply?: boolean;
   repliesExpanded?: boolean;
   onToggleReplies?: () => void;
@@ -329,6 +329,7 @@ export function CommentItem({
         {!isReply && isReplying && onSendReply && (
           <div className="mt-2">
             <CommentComposer
+              postId={comment.post_id}
               replyTo={comment}
               onCancelReply={() => onCancelReply?.()}
               onSubmit={onSendReply}

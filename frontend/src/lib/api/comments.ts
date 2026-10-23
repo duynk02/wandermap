@@ -1,5 +1,5 @@
 import { COMMENTS_PAGE_SIZE } from "@/constants";
-import type { CreateCommentResult, DeleteCommentResult, PaginatedResponse, PostComment } from "@/types";
+import type { CreateCommentInput, CreateCommentResult, DeleteCommentResult, PaginatedResponse, PostComment } from "@/types";
 import { apiFetch } from "./client";
 
 /** Top-level comments of a post, newest first. Public for visible posts. */
@@ -17,7 +17,7 @@ export const getReplies = (commentId: string, page = 1, signal?: AbortSignal) =>
   });
 
 /** Requires login. Pass `parent_id` (a top-level comment of the same post) to reply. */
-export const createComment = (postId: string, input: { content: string; parent_id?: string }) =>
+export const createComment = (postId: string, input: CreateCommentInput) =>
   apiFetch<CreateCommentResult>(`/posts/${encodeURIComponent(postId)}/comments`, {
     method: "POST",
     body: input,

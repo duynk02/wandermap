@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { NotificationQueryDto } from './dto/notification-query.dto';
 import { postAccess } from '../posts/post-access';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { parseNotificationChange } from './notification-events';
 
 export type NotificationType = 'follow' | 'like' | 'comment';
 
@@ -42,7 +44,13 @@ const EVENT_ACCESS = `(n.post_id IS NULL OR EXISTS (SELECT 1 FROM posts p WHERE 
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(private readonly db: DatabaseService, private readonly realtime: RealtimeGateway) {}
+
+  /** Called only by the post-commit database listener; it never creates notifications. */
+  async publishDatabaseChange(payload: string): Promise<void> {
+    const event = parseNotificationChange(payload);
+    if (event) await this.realtime.emitNotificationChange(event);
+  }
 
   async list(userId: string, query: NotificationQueryDto): Promise<NotificationPage> {
     const page = query.page ?? 1;
@@ -97,6 +105,23 @@ export class NotificationsService {
 
   async markAllRead(userId: string): Promise<{ updated: number }> {
     const result = await this.db.query('UPDATE notifications SET read_at = now() WHERE recipient_id = $1 AND read_at IS NULL', [userId]);
+    return { updated: result.rowCount ?? 0 };
+  }
+
+  /** A list item groups likes/comments on a post; mark its actual unread rows atomically. */
+  async markRead(userId: string, groupId: string): Promise<{ updated: number }> {
+    const parts = groupId.split(':');
+    const result = parts.length === 1
+      ? await this.db.query(
+        `UPDATE notifications n SET read_at = now()
+         WHERE n.recipient_id = $1 AND n.id = $2::uuid AND n.type = 'follow' AND n.read_at IS NULL AND ${EVENT_ACCESS}`,
+        [userId, parts[0]],
+      )
+      : await this.db.query(
+        `UPDATE notifications n SET read_at = now()
+         WHERE n.recipient_id = $1 AND n.type = $2 AND n.post_id = $3::uuid AND n.read_at IS NULL AND ${EVENT_ACCESS}`,
+        [userId, parts[0].toLowerCase(), parts[1]],
+      );
     return { updated: result.rowCount ?? 0 };
   }
 }
