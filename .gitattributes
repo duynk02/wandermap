@@ -3,3 +3,7 @@
 backend/src/database/migrations/006_profile_editing.sql text eol=lf
 backend/src/database/migrations/007_travel_map_journeys.sql text eol=lf
 backend/src/database/migrations/008_visited_locations_cutover.sql text eol=lf
+backend/src/database/migrations/010_notifications_realtime.sql text eol=lf
+backend/src/database/migrations/012_comment_interaction_notifications.sql text eol=lf
+backend/src/database/migrations/013_conversations_messages.sql text eol=lf
+backend/src/database/migrations/014_messaging_blocks.sql text eol=lf

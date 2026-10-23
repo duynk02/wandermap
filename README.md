@@ -351,7 +351,7 @@ Roadmap là **kế hoạch**, không phải các tính năng được xác nhậ
 
 ### Phase 4 — Messaging & Social Connections
 
-- [ ] Messaging 1–1, danh sách conversations, lịch sử tin nhắn và read receipts.
+- [x] Messaging 1–1, danh sách conversations, lịch sử tin nhắn và read receipts; [Frontend Messaging UI — Feature 4](docs/phase-4-feature-4.md).
 - [ ] Chia sẻ bài đăng, địa điểm hoặc hành trình vào cuộc trò chuyện.
 - [ ] Bổ sung chặn/báo cáo người dùng và cơ chế chống spam.
 - [ ] Nhóm trò chuyện, typing/presence là mở rộng sau MVP.

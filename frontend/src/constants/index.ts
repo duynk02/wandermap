@@ -100,6 +100,8 @@ export const ROUTES = {
   home: "/",
   explore: "/explore",
   feed: "/feed",
+  messages: "/messages",
+  conversation: (id: string) => `/messages/${id}`,
   notifications: "/notifications",
   login: "/auth/login",
   register: "/auth/register",
