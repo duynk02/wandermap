@@ -16,6 +16,7 @@ import { CommentsModule } from './comments/comments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { JourneysModule } from './journeys/journeys.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { MessagingModule } from './messaging/messaging.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     NotificationsModule,
     JourneysModule,
     RealtimeModule,
+    MessagingModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

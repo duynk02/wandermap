@@ -27,7 +27,7 @@ describeDatabase('Visited locations HTTP API with real PostgreSQL/PostGIS', () =
   const locations = [randomUUID(), randomUUID(), randomUUID()];
   const secret = 'isolated-visited-api-test-secret-at-least-32-characters';
   const jwt = new JwtService({ secret });
-  const token = (id = owner) => `Bearer ${jwt.sign({ sub: id, email: `${id}@example.test` })}`;
+  const token = (id = owner) => `Bearer ${jwt.sign({ sub: id, email: `${id}@example.test` }, { expiresIn: 300 })}`;
   const base = '/api/v1/users/me/visited-locations';
 
   beforeAll(async () => {
@@ -55,7 +55,7 @@ describeDatabase('Visited locations HTTP API with real PostgreSQL/PostGIS', () =
     migratedMark = (await db.query<{ id: string }>('SELECT id FROM user_visited_locations WHERE user_id = $1 AND location_id = $2', [owner, locations[0]])).rows[0].id;
 
     const module = await Test.createTestingModule({ imports: [
-      ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, load: [() => ({ JWT_ACCESS_SECRET: secret })] }),
+      ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, skipProcessEnv: true, load: [() => ({ JWT_ACCESS_SECRET: secret })] }),
       DatabaseModule, UsersModule, JourneysModule,
     ] }).overrideProvider(DatabaseService).useValue({
       query: (sql: string, values: unknown[]) => db.query(sql, values),
@@ -116,6 +116,10 @@ describeDatabase('Visited locations HTTP API with real PostgreSQL/PostGIS', () =
     await request(app.getHttpServer()).post(`${base}/${migratedMark}/visits`).send({ visited_at: '2026-01-01' }).expect(401);
     await request(app.getHttpServer()).get(base).set('Authorization', 'Bearer invalid').expect(401);
     await request(app.getHttpServer()).get(base).set('Authorization', token(inactive)).expect(401);
+    for (const invalid of [
+      jwt.sign({ sub: owner, email: `${owner}@example.test` }),
+      jwt.sign({ sub: owner, email: `${owner}@example.test` }, { expiresIn: -1 }),
+    ]) await request(app.getHttpServer()).get(base).set('Authorization', `Bearer ${invalid}`).expect(401);
   });
 
   it('rejects unknown owner fields, invalid dates, visibility, note lengths and malformed pagination', async () => {

@@ -40,6 +40,13 @@ export const LOCATION_CATEGORIES: {
 
 // Query keys for TanStack Query
 export const QUERY_KEYS = {
+  messaging: {
+    all: ["messaging"] as const,
+    conversations: (viewer: string) => ["messaging", viewer, "conversations"] as const,
+    conversation: (viewer: string, id: string) => ["messaging", viewer, "conversation", id] as const,
+    messages: (viewer: string, id: string) => ["messaging", viewer, "messages", id] as const,
+    unreadCount: (viewer: string) => ["messaging", viewer, "unread-count"] as const,
+  },
   travelMap: {
     all: ["travel-map"] as const,
     data: (username: string, viewer: string, filters: object) => ["travel-map", username, viewer, filters] as const,

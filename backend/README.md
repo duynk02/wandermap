@@ -14,6 +14,10 @@ idempotency key, thứ tự sequence và read cursor. Chạy migration 013 khi t
 REST/socket/UI messaging chưa triển khai ở bước này. Xem [thiết kế, protocol SQL và
 kiểm thử PostgreSQL](../docs/phase-4-feature-1.md).
 
+Phase 4 Feature 2 có Messaging REST API, cursor pagination, authorization, read/unread,
+idempotency và block nhắn tin tối thiểu (migration 014). Frontend có wrappers/types;
+messaging socket events/UI chưa triển khai. Xem [API contract, policy và kiểm thử](../docs/phase-4-feature-2.md).
+
 > **Trạng thái tích hợp:** backend được thêm vào repository nhưng frontend Next.js hiện tại vẫn còn Supabase imports/API routes. Chưa chuyển frontend sang API mới trong phạm vi này. Không xóa Supabase project cũ cho đến khi hoàn tất đồng bộ frontend và kế hoạch chuyển dữ liệu.
 
 ## Yêu cầu

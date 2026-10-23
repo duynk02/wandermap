@@ -6,6 +6,7 @@ export * from "./visited-locations";
 export * from "./journeys";
 export * from "./comments";
 export * from "./notifications";
+export * from "./messaging";
 export * from "./places";
 export * from "./uploads";
 export * as authApi from "./auth";
