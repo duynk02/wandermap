@@ -3,6 +3,8 @@ import type { NotificationItem } from "@/types";
 const VERB: Record<NotificationItem["type"], string> = {
   like: "đã thích bài viết của bạn",
   comment: "đã bình luận về bài viết của bạn",
+  comment_like: "đã thích bình luận của bạn",
+  reply: "đã trả lời bình luận của bạn",
   follow: "đã theo dõi bạn",
 };
 

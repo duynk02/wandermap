@@ -4,7 +4,10 @@ Backend độc lập cho WanderMap, xây dựng bằng NestJS + TypeScript + Pos
 
 Phase 3 Step 1 bổ sung Socket.IO namespace `/realtime` trên cùng HTTP server, JWT
 middleware và room riêng theo user. Xem [contract, lifecycle và cấu hình triển khai](../docs/phase-3-step-1.md).
-Notifications vẫn dùng REST/polling; chưa phát notification/unread realtime hoặc recovery.
+Feature 2 phát thay đổi notification sau commit qua PostgreSQL LISTEN/NOTIFY và socket;
+frontend refetch REST cho list/unread. Áp dụng migrations 010–012 trước khi chạy phiên
+bản mới; xem [contract, triển khai và kiểm thử](../docs/phase-3-step-2.md). Recovery/replay
+chưa triển khai.
 
 > **Trạng thái tích hợp:** backend được thêm vào repository nhưng frontend Next.js hiện tại vẫn còn Supabase imports/API routes. Chưa chuyển frontend sang API mới trong phạm vi này. Không xóa Supabase project cũ cho đến khi hoàn tất đồng bộ frontend và kế hoạch chuyển dữ liệu.
 

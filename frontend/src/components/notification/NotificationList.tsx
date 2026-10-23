@@ -1,24 +1,29 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Heart, Loader2, MessageCircle, UserPlus } from "lucide-react";
-import { getNotifications, markAllNotificationsRead } from "@/lib/api";
+import { getNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { QUERY_KEYS, ROUTES } from "@/constants";
 import { cn, getAvatarUrl, timeAgo } from "@/lib/utils";
 import type { NotificationItem } from "@/types";
+import { useAuthStore } from "@/stores/authStore";
+import { useRealtimeStore } from "@/stores/realtimeStore";
+import { refreshNotificationQueries } from "@/lib/realtime/notifications";
 import { NotificationMessage } from "./NotificationMessage";
 
 const TYPE_ICON = {
   like: { Icon: Heart, className: "bg-red-500" },
   comment: { Icon: MessageCircle, className: "bg-brand-500" },
+  comment_like: { Icon: Heart, className: "bg-red-500" },
+  reply: { Icon: MessageCircle, className: "bg-brand-500" },
   follow: { Icon: UserPlus, className: "bg-blue-500" },
 } as const;
 
-function NotificationRow({ item, onNavigate }: { item: NotificationItem; onNavigate?: () => void }) {
+function NotificationRow({ item, onNavigate, onRead }: { item: NotificationItem; onNavigate?: () => void; onRead: () => void }) {
   const actor = item.actors[0];
   const href = item.type === "follow" && actor ? ROUTES.profile(actor.username) : item.post ? ROUTES.post(item.post.id) : ROUTES.feed;
   const { Icon, className } = TYPE_ICON[item.type];
@@ -27,7 +32,7 @@ function NotificationRow({ item, onNavigate }: { item: NotificationItem; onNavig
     <li>
       <Link
         href={href}
-        onClick={onNavigate}
+        onClick={() => { if (item.is_unread) onRead(); onNavigate?.(); }}
         className={cn(
           "flex items-center gap-3 border-l-4 px-4 py-3 transition-colors hover:bg-surface-muted",
           item.is_unread ? "border-brand-500 bg-surface-muted" : "border-transparent"
@@ -76,6 +81,7 @@ export function NotificationList({ variant = "page", onNavigate }: NotificationL
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const viewer = user?.id ?? "guest";
+  const realtimeHealthy = useRealtimeStore((state) => state.connected && state.notificationsAvailable && state.userId === user?.id);
 
   // The access token only exists in the browser, so guests are sent to login from here.
   useEffect(() => {
@@ -90,27 +96,34 @@ export function NotificationList({ variant = "page", onNavigate }: NotificationL
     initialPageParam: 1,
     getNextPageParam: (last, pages) => (last.hasMore ? pages.length + 1 : undefined),
     enabled: isAuthenticated,
-    refetchOnWindowFocus: false, // keep the "new" highlight while this list is open
-    gcTime: 0, // reopening shows a fresh list instead of the stale highlighted one
+    refetchInterval: realtimeHealthy ? false : 30_000,
+    refetchOnWindowFocus: false, // Owned by the throttled realtime visibility observer.
   });
 
   const items = (query.data?.pages ?? []).flatMap((page) => page.data).filter(
     (item, index, all) => all.findIndex((other) => other.id === item.id) === index
   );
 
-  // Opening the list clears the bell badge (as on Facebook / Threads); the rows keep their
-  // highlight until the next visit because the list itself is not refetched.
-  const markedRef = useRef(false);
-  const markRead = useMutation({
-    mutationFn: markAllNotificationsRead,
-    onSuccess: () => queryClient.setQueryData(QUERY_KEYS.notifications.unreadCount(viewer), 0),
+  const refreshViewer = (owner: string) => {
+    void refreshNotificationQueries(queryClient, [
+      QUERY_KEYS.notifications.list(owner),
+      QUERY_KEYS.notifications.unreadCount(owner),
+    ], () => useAuthStore.getState().user?.id === owner);
+  };
+  const readAll = useMutation({
+    mutationFn: (owner: string) => {
+      if (useAuthStore.getState().user?.id !== owner) throw new Error("Phiên đăng nhập đã thay đổi.");
+      return markAllNotificationsRead();
+    },
+    onSuccess: (_result, owner) => refreshViewer(owner),
   });
-  useEffect(() => {
-    if (query.isSuccess && !markedRef.current && items.some((item) => item.is_unread)) {
-      markedRef.current = true;
-      markRead.mutate();
-    }
-  }, [query.isSuccess, items, markRead]);
+  const readGroup = useMutation({
+    mutationFn: ({ groupId, owner }: { groupId: string; owner: string }) => {
+      if (useAuthStore.getState().user?.id !== owner) throw new Error("Phiên đăng nhập đã thay đổi.");
+      return markNotificationRead(groupId);
+    },
+    onSuccess: (_result, { owner }) => refreshViewer(owner),
+  });
 
   if (authLoading || !isAuthenticated || query.isLoading) {
     return (
@@ -147,9 +160,22 @@ export function NotificationList({ variant = "page", onNavigate }: NotificationL
 
   return (
     <>
+      <div className="flex justify-end border-b border-border px-4 py-2">
+        <button
+          type="button"
+          onClick={() => readAll.mutate(viewer)}
+          disabled={readAll.isPending}
+          className="rounded-lg px-2 py-1 text-xs font-semibold text-brand-600 hover:bg-surface-muted disabled:opacity-50"
+        >
+          {readAll.isPending ? "Đang cập nhật..." : "Đánh dấu tất cả đã đọc"}
+        </button>
+      </div>
+      {(readAll.isError || readGroup.isError) && (
+        <p role="alert" className="px-4 py-2 text-xs text-red-500">Không thể đánh dấu đã đọc. Vui lòng thử lại.</p>
+      )}
       <ul className={cn("divide-y divide-border", !isPopover && "overflow-hidden rounded-2xl bg-surface-elevated shadow-sm")}>
         {items.map((item) => (
-          <NotificationRow key={item.id} item={item} onNavigate={onNavigate} />
+          <NotificationRow key={item.id} item={item} onNavigate={onNavigate} onRead={() => readGroup.mutate({ groupId: item.id, owner: viewer })} />
         ))}
       </ul>
 

@@ -9,6 +9,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { setPostLiked } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+import { usePostSave } from "@/hooks/usePostSave";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { timeAgo, formatCount, getAvatarUrl, getPostImageUrl, cn } from "@/lib/utils";
 import { ROUTES, QUERY_KEYS } from "@/constants";
 import type { Post } from "@/types";
@@ -32,6 +34,8 @@ export function PostCard({ post, compact = false }: PostCardProps) {
 function LocationPostCard({ post, compact = false }: PostCardProps & { post: import("@/types").LocationPost }) {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
+  const requireAuth = useRequireAuth();
+  const { saved, savesCount, saveMutation } = usePostSave(post);
 
   const [optimisticLiked, setOptimisticLiked] = useState(post.is_liked ?? false);
   const [optimisticCount, setOptimisticCount] = useState(post.likes_count);
@@ -150,9 +154,18 @@ function LocationPostCard({ post, compact = false }: PostCardProps & { post: imp
               {formatCount(optimisticCount)}
             </motion.button>
 
-            <button className="flex min-h-9 items-center gap-1.5 text-xs text-ink-muted hover:text-brand-500 transition-colors">
-              <Bookmark className="h-4 w-4" />
-              {formatCount(post.saves_count)}
+            <button
+              type="button"
+              aria-label={saved ? "Bỏ lưu bài đăng" : "Lưu bài đăng"}
+              aria-pressed={saved}
+              disabled={saveMutation.isPending}
+              onClick={() => {
+                if (requireAuth("Đăng nhập để lưu bài đăng")) saveMutation.mutate(!saved);
+              }}
+              className="flex min-h-9 items-center gap-1.5 text-xs text-ink-muted hover:text-brand-500 transition-colors"
+            >
+              <Bookmark className={cn("h-4 w-4", saved && "fill-brand-500 text-brand-500")} />
+              {formatCount(savesCount)}
             </button>
           </div>
         )}

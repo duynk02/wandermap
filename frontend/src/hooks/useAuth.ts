@@ -2,9 +2,11 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { authApi, getAuthSessionVersion, refreshAccessToken, setSessionExpiredHandler } from "@/lib/api";
+import { authApi, getAuthSessionVersion, refreshAccessToken, setAccessToken, setSessionExpiredHandler, subscribeSessionChange } from "@/lib/api";
+import { observeBrowserResume } from "@/lib/realtime/browser-resume";
 import type { LoginInput, RegisterInput } from "@/lib/validations";
 import { useAuthStore } from "@/stores/authStore";
+import { useRealtimeStore } from "@/stores/realtimeStore";
 import type { CurrentUser } from "@/types";
 
 function applyUser(user: CurrentUser) {
@@ -36,30 +38,65 @@ export async function signOut() {
 export function useAuthListener() {
   useEffect(() => {
     const { setLoading, reset } = useAuthStore.getState();
-    setSessionExpiredHandler(reset);
+    setSessionExpiredHandler(() => { reset(); useRealtimeStore.getState().setPhase("session-expired"); });
     let cancelled = false;
+    let restoring = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let retryDelay = 1_000;
+    let forceRestore = false;
+    let restoreRequested = false;
 
-    (async () => {
-      if (!useAuthStore.getState().profile) {
+    const restore = async () => {
+      if (cancelled || restoring || useAuthStore.getState().user) return;
+      if (!useAuthStore.getState().profile && !restoreRequested) {
         setLoading(false);
         return;
       }
+      restoring = true;
+      forceRestore = false;
       try {
         // refreshAccessToken resets an invalid session itself. A stale refresh result
         // must not reset a session established by a concurrent login.
-        if (!(await refreshAccessToken()) || cancelled) return;
+        if (!(await refreshAccessToken()) || cancelled) {
+          if (!forceRestore) restoreRequested = false;
+          return;
+        }
         const restoredVersion = getAuthSessionVersion();
         const me = await authApi.getMe();
-        if (!cancelled && restoredVersion === getAuthSessionVersion()) applyUser(me);
+        if (!cancelled && restoredVersion === getAuthSessionVersion()) { applyUser(me); restoreRequested = false; }
       } catch {
-        // Network/server error: not a logout. Stay signed-out for now, keep the hint.
+        if (!cancelled) {
+          retryTimer = setTimeout(() => { retryTimer = undefined; void restore(); }, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 30_000);
+        }
       } finally {
+        restoring = false;
         if (!cancelled) setLoading(false);
+        if (!cancelled && forceRestore) {
+          if (retryTimer) clearTimeout(retryTimer);
+          retryTimer = undefined;
+          queueMicrotask(() => { void restore(); });
+        }
       }
-    })();
+    };
+    void restore();
+    const stopResume = observeBrowserResume(() => { if (!retryTimer) void restore(); }, () => {});
+    const stopSession = subscribeSessionChange((change) => {
+      setAccessToken(null);
+      reset();
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = undefined;
+      forceRestore = change === "signed-in";
+      restoreRequested = forceRestore;
+      // A shared-cookie login invalidates this tab's old identity and restores via REST.
+      if (forceRestore) void restore();
+    });
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      stopResume();
+      stopSession();
       setSessionExpiredHandler(null);
     };
   }, []);

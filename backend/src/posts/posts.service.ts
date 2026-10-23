@@ -4,6 +4,7 @@ import { CreatePostDto, UpdatePostDto } from './dto/create-post.dto';
 import { PostQueryDto } from './dto/post-query.dto';
 import { ShareJourneyDto } from './dto/share-journey.dto';
 import { journeyPostAccess, postAccess } from './post-access';
+import { SavedPostQueryDto } from './dto/saved-post-query.dto';
 
 const POST_FIELDS = `p.id, p.author_id, p.location_id, p.content, p.images, p.rating, p.visited_at, p.visibility,
   p.likes_count, p.saves_count, p.comments_count, p.created_at, p.updated_at, p.post_type, p.journey_id, p.preview_revision,
@@ -22,6 +23,21 @@ const POST_FIELDS = `p.id, p.author_id, p.location_id, p.content, p.images, p.ra
 @Injectable()
 export class PostsService {
   constructor(private readonly db: DatabaseService) {}
+
+  async saved(userId: string, query: SavedPostQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 12;
+    const where = `s.user_id = $1 AND ${postAccess()}`;
+    const [data, count] = await Promise.all([
+      this.db.query(`SELECT ${POST_FIELDS} FROM saves s JOIN posts p ON p.id = s.post_id
+        JOIN profiles author ON author.id = p.author_id LEFT JOIN locations l ON l.id = p.location_id
+        WHERE ${where} ORDER BY s.created_at DESC, p.id DESC LIMIT $2 OFFSET $3`,
+      [userId, pageSize, (page - 1) * pageSize]),
+      this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM saves s JOIN posts p ON p.id = s.post_id
+        WHERE ${where}`, [userId]),
+    ]);
+    return this.paginated(data.rows, Number(count.rows[0]?.count ?? 0), page, pageSize);
+  }
 
   async feed(query: PostQueryDto, viewerId?: string) {
     const page = query.page ?? 1; const pageSize = query.pageSize ?? 12; const offset = (page - 1) * pageSize;

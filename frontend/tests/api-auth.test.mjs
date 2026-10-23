@@ -11,10 +11,84 @@ import {
   setSessionExpiredHandler,
   settleAccessTokenRefresh,
   subscribeAccessToken,
+  withSessionCookieLock,
+  subscribeSessionChange,
+  announceSessionChange,
 } from "../src/lib/api/client.ts";
+
+test("cross-tab cookie operations are serialized without sharing access tokens", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  globalThis.window = {};
+  let tail = Promise.resolve();
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: { locks: {
+    request(name, operation) {
+      assert.equal(name, "wandermap-session-cookie");
+      const current = tail.then(operation); tail = current.catch(() => {}); return current;
+    },
+  } } });
+  const operations = [];
+  let finish;
+  try {
+    const first = withSessionCookieLock(async () => { operations.push("refresh"); await new Promise(resolve => { finish = resolve; }); operations.push("cookie-rotated"); });
+    const second = withSessionCookieLock(async () => { operations.push("logout"); });
+    await Promise.resolve();
+    assert.deepEqual(operations, ["refresh"]);
+    finish(); await Promise.all([first, second]);
+    assert.deepEqual(operations, ["refresh", "cookie-rotated", "logout"]);
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else delete globalThis.navigator;
+  }
+});
+
+test("cross-tab channel accepts only session lifecycle signals and closes on cleanup", () => {
+  const Original = globalThis.BroadcastChannel;
+  globalThis.window = {};
+  let channel;
+  globalThis.BroadcastChannel = class {
+    constructor() { channel = this; this.sent = []; this.closed = false; }
+    postMessage(data) { this.sent.push(data); }
+    close() { this.closed = true; }
+  };
+  const received = [];
+  const stop = subscribeSessionChange(change => received.push(change));
+  try {
+    channel.onmessage({ data: { token: "must-not-be-accepted" } });
+    channel.onmessage({ data: "signed-out" });
+    announceSessionChange("signed-in");
+    assert.deepEqual(received, ["signed-out"]);
+    assert.deepEqual(channel.sent, ["signed-in"]);
+  } finally { stop(); globalThis.BroadcastChannel = Original; }
+  assert.equal(channel.closed, true);
+});
 
 const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;
+
+test("a timed-out refresh releases the shared request so a later recovery can succeed", async () => {
+  const timeout = AbortSignal.timeout;
+  const failure = new Error("Auth request timeout");
+  try {
+    AbortSignal.timeout = milliseconds => {
+      assert.equal(milliseconds, 15_000);
+      return AbortSignal.abort(failure);
+    };
+    globalThis.fetch = async (_url, options) => { assert.equal(options.signal.aborted, true); throw options.signal.reason; };
+    await assert.rejects(refreshAccessToken(), failure);
+    globalThis.fetch = async () => Response.json({ accessToken: "recovered-after-timeout" });
+    assert.equal(await refreshAccessToken(), "recovered-after-timeout");
+  } finally { AbortSignal.timeout = timeout; }
+});
+
+test("a shared-cookie account switch cannot publish another owner's token before the tab signal", async () => {
+  const jwt = sub => `header.${Buffer.from(JSON.stringify({ sub })).toString("base64url")}.signature`;
+  setAccessToken(jwt("account-a"));
+  let expired = 0;
+  setSessionExpiredHandler(() => expired++);
+  globalThis.fetch = async () => Response.json({ accessToken: jwt("account-b") });
+  assert.equal(await refreshAccessToken(), null);
+  assert.equal(getAccessToken(), null);
+  assert.equal(expired, 1);
+});
 beforeEach(() => { setAccessToken(null); });
 afterEach(async () => {
   await settleAccessTokenRefresh();
@@ -266,4 +340,20 @@ test("a superseded login cannot publish credentials or return the previous user"
   } finally {
     unsubscribe();
   }
+});
+
+test("HTTP 401 replay keeps the comment idempotency key and request body unchanged", async () => {
+  globalThis.window = {};
+  setAccessToken("expired-token");
+  const input = { content: "Một kỷ niệm", parent_id: "parent-comment", client_request_id: "30000000-0000-4000-8000-000000000001" };
+  const bodies = [];
+  globalThis.fetch = async (url, options) => {
+    if (url.endsWith("/auth/refresh")) return Response.json({ accessToken: "fresh-token" });
+    bodies.push(options.body);
+    return bodies.length === 1 ? new Response(null, { status: 401 }) : Response.json({ comment: { id: "same-comment" } });
+  };
+  await apiFetch("/posts/post-id/comments", { method: "POST", body: input });
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0], bodies[1]);
+  assert.equal(JSON.parse(bodies[1]).client_request_id, input.client_request_id);
 });

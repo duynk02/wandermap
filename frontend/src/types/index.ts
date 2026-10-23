@@ -221,6 +221,14 @@ export interface PostComment {
   is_liked: boolean;
 }
 
+/** Comment/reply creation; older clients may omit the idempotency key. */
+export interface CreateCommentInput {
+  content: string;
+  parent_id?: string;
+  /** One UUID per user action; retries reuse it to avoid duplicate comments/notifications. */
+  client_request_id?: string;
+}
+
 /** Authoritative counters returned when a comment/reply is created. */
 export interface CreateCommentResult {
   comment: PostComment;
@@ -238,7 +246,7 @@ export interface DeleteCommentResult {
 
 
 // Notifications
-export type NotificationType = 'follow' | 'like' | 'comment';
+export type NotificationType = 'follow' | 'like' | 'comment' | 'comment_like' | 'reply';
 
 /** One line of the notification list. All likes (or comments) on one post are a single item. */
 export interface NotificationItem {

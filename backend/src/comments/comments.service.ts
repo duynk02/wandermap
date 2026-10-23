@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { PostsService } from '../posts/posts.service';
 import { CommentQueryDto } from './dto/comment-query.dto';
@@ -122,11 +122,33 @@ export class CommentsService {
             if (parent.parent_id) throw new BadRequestException('You can only reply to a top-level comment.');
         }
 
-        const inserted = await this.db.query<{ id: string }>(
-            'INSERT INTO comments (post_id, author_id, parent_id, content) VALUES ($1, $2, $3, $4) RETURNING id',
-            [postId, userId, dto.parent_id ?? null, content],
-        );
-        const commentId = inserted.rows[0].id;
+        let commentId: string;
+        if (dto.client_request_id) {
+            // The unique request key serializes concurrent retries; a skipped insert fires no notification/counter trigger.
+            const inserted = await this.db.query<{ id: string }>(
+                `INSERT INTO comments (post_id, author_id, parent_id, content, client_request_id) VALUES ($1, $2, $3, $4, $5)
+                 ON CONFLICT (author_id, client_request_id) WHERE client_request_id IS NOT NULL DO NOTHING RETURNING id`,
+                [postId, userId, dto.parent_id ?? null, content, dto.client_request_id],
+            );
+            if (inserted.rows[0]) commentId = inserted.rows[0].id;
+            else {
+                const existing = await this.db.query<CommentRef & { content: string }>(
+                    'SELECT id, post_id, parent_id, content FROM comments WHERE author_id = $1 AND client_request_id = $2',
+                    [userId, dto.client_request_id],
+                ).then((result) => result.rows[0]);
+                if (!existing || existing.post_id !== postId || existing.parent_id !== (dto.parent_id ?? null) || existing.content !== content) {
+                    throw new ConflictException('This comment request was already used with different content or context.');
+                }
+                commentId = existing.id;
+            }
+        } else {
+            // Older clients may omit the request key; preserve their existing create contract.
+            const inserted = await this.db.query<{ id: string }>(
+                'INSERT INTO comments (post_id, author_id, parent_id, content) VALUES ($1, $2, $3, $4) RETURNING id',
+                [postId, userId, dto.parent_id ?? null, content],
+            );
+            commentId = inserted.rows[0].id;
+        }
 
         const [comment, post, parent] = await Promise.all([
             this.getComment(commentId, userId),

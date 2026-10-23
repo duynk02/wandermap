@@ -11,6 +11,34 @@
  * they only ever see public data.
  */
 
+export type SessionChange = "signed-in" | "signed-out";
+const sessionListeners = new Set<(change: SessionChange) => void>();
+let sessionChannel: BroadcastChannel | null = null;
+function openSessionChannel() {
+  if (!sessionChannel && typeof window !== "undefined" && typeof BroadcastChannel !== "undefined") {
+    sessionChannel = new BroadcastChannel("wandermap-session");
+    sessionChannel.onmessage = ({ data }: MessageEvent<unknown>) => {
+      if (data === "signed-in" || data === "signed-out") sessionListeners.forEach((listener) => listener(data));
+    };
+  }
+  return sessionChannel;
+}
+export function announceSessionChange(change: SessionChange) { sessionChannel?.postMessage(change); }
+export function subscribeSessionChange(listener: (change: SessionChange) => void) {
+  sessionListeners.add(listener);
+  openSessionChannel();
+  return () => {
+    sessionListeners.delete(listener);
+    if (!sessionListeners.size) { sessionChannel?.close(); sessionChannel = null; }
+  };
+}
+export async function withSessionCookieLock<T>(operation: () => Promise<T>): Promise<T> {
+  if (typeof window !== "undefined" && typeof navigator !== "undefined" && navigator.locks) {
+    return await navigator.locks.request("wandermap-session-cookie", operation);
+  }
+  return operation();
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -71,15 +99,25 @@ export const setSessionExpiredHandler = (handler: (() => void) | null) => {
  * and treats re-use of a rotated token as theft, revoking every session of the user.
  */
 let refreshInFlight: Promise<string | null> | null = null;
+function tokenSubject(token: string | null): string | null {
+  try {
+    if (!token) return null;
+    const value: unknown = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return value && typeof value === "object" && "sub" in value && typeof value.sub === "string" ? value.sub : null;
+  } catch { return null; }
+}
 export function refreshAccessToken(): Promise<string | null> {
   if (authTransitionDepth) return Promise.resolve(null);
   if (!refreshInFlight) {
     const startedVersion = credentialVersion;
-    refreshInFlight = (async () => {
+    const startedSubject = tokenSubject(accessToken);
+    refreshInFlight = withSessionCookieLock(async () => {
       try {
+        if (startedVersion !== credentialVersion || authTransitionDepth) return null;
         const res = await fetch(`${apiBaseUrl()}/auth/refresh`, {
           method: "POST",
           credentials: "include",
+          signal: AbortSignal.timeout(15_000),
         });
         if (res.status === 401) {
           if (startedVersion === credentialVersion) {
@@ -93,12 +131,19 @@ export function refreshAccessToken(): Promise<string | null> {
         // A pending refresh belongs to the credentials it started with. It must never
         // restore a logged-out session or replace a newly signed-in account's token.
         if (startedVersion !== credentialVersion) return null;
+        // A different tab may have changed the shared cookie before its lifecycle
+        // signal arrives. Never attach that account's token to this tab's old UI.
+        if (startedSubject && tokenSubject(refreshedToken) !== startedSubject) {
+          setAccessToken(null);
+          onSessionExpired?.();
+          return null;
+        }
         publishAccessToken(refreshedToken);
         return accessToken;
       } finally {
         refreshInFlight = null;
       }
-    })();
+    });
   }
   return refreshInFlight;
 }
@@ -127,7 +172,12 @@ export function runAuthTransition<T>(operation: (commitToken: (token: string) =>
     try {
       await previous;
       await settleAccessTokenRefresh();
-      const result = await operation((token) => { assertCurrent(); publishAccessToken(token); });
+      let signedIn = false;
+      const result = await withSessionCookieLock(async () => {
+        const result = await operation((token) => { assertCurrent(); publishAccessToken(token); signedIn = true; });
+        announceSessionChange(signedIn ? "signed-in" : "signed-out");
+        return result;
+      });
       assertCurrent();
       return result;
     } finally {
@@ -194,7 +244,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       body: body === undefined ? undefined :isForm ? (body as FormData) : JSON.stringify(body),
       credentials: "include",
       cache: isServer() ? "no-store" : undefined,
-      signal,
+      signal: signal ?? (path.startsWith("/auth/") ? AbortSignal.timeout(15_000) : undefined),
     });
   };
 

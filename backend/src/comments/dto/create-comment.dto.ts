@@ -17,4 +17,9 @@ export class CreateCommentDto {
   @IsOptional()
   @IsUUID()
   parent_id?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Stable per submission: retrying the same request returns the existing comment.' })
+  @IsOptional()
+  @IsUUID()
+  client_request_id?: string;
 }

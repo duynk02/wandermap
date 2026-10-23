@@ -7,6 +7,7 @@ import { PostGrid } from "@/components/post/PostGrid";
 import { getPostsByAuthor, getProfileByUsername } from "@/lib/api";
 import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { ProfileTabs } from "@/components/profile/ProfileTabs";
+import { SavedPosts } from "@/components/profile/SavedPosts";
 
 interface Props {
   params: Promise<{ username: string }>;
@@ -58,7 +59,7 @@ export default async function ProfilePage({ params, searchParams }: Props) {
           </TabsContent>
 
           <TabsContent value="saved" className="mt-6">
-            {/* Saved posts — fetched client-side */}
+            <SavedPosts profileId={profile.id} />
           </TabsContent>
         </ProfileTabs>
       </div>

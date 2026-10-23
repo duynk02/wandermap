@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Bookmark, Heart, MapPin, MessageCircle, Star } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { setPostLiked, setPostSaved } from "@/lib/api";
+import { setPostLiked } from "@/lib/api";
+import { usePostSave } from "@/hooks/usePostSave";
 import { JourneyPostContent } from "@/components/journey/JourneyPostContent";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { CommentSection } from "@/components/comment/CommentSection";
@@ -61,17 +62,7 @@ export function FeedPostCard({ post }: { post: Post }) {
     const [likesCount, setLikesCount] = useState(post.likes_count);
     const [commentsOpen, setCommentsOpen] = useState(false);
     const [commentsCount, setCommentsCount] = useState(post.comments_count ?? 0);
-    const [saved, setSaved] = useState(post.is_saved ?? false);
-    const [savesCount, setSavesCount] = useState(post.saves_count);
-    const saveMutation = useMutation({
-        mutationFn: (next: boolean) => setPostSaved(post.id, next),
-        onSuccess: (result) => {
-            setSaved(result.saved);
-            setSavesCount(result.saves_count);
-            void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.posts.byId(post.id) });
-        },
-        onError: () => toast.error("Không thể cập nhật bài đã lưu"),
-    });
+    const { saved, savesCount, saveMutation } = usePostSave(post);
 
     // Same behaviour as PostCard: optimistic, rolled back on failure, then the API's counter wins.
     const likeMutation = useMutation({

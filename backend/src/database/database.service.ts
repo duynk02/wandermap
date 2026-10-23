@@ -1,20 +1,24 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { Client, ClientConfig, Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
   private readonly pool: Pool;
+  private readonly connectionConfig: ClientConfig;
 
   constructor(config: ConfigService) {
-    this.pool = new Pool({
+    this.connectionConfig = {
       connectionString: config.getOrThrow<string>('DATABASE_URL'),
-      max: config.get<number>('DB_POOL_MAX', 10),
       connectionTimeoutMillis: 5_000,
-      idleTimeoutMillis: 30_000,
       application_name: 'wandermap-api',
       ssl: config.get<string>('PGSSLMODE') === 'require' ? { rejectUnauthorized: true } : undefined,
+    };
+    this.pool = new Pool({
+      ...this.connectionConfig,
+      max: config.get<number>('DB_POOL_MAX', 10),
+      idleTimeoutMillis: 30_000,
     });
     this.pool.on('error', (error) => this.logger.error('Unexpected idle PostgreSQL client error', error.stack));
   }
@@ -23,6 +27,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     await this.pool.query('SELECT 1');
     this.logger.log('PostgreSQL connection established');
   }
+
+  /** One long-lived listener, separate from the request pool (including DB_POOL_MAX=1). */
+  createListener(): Client { return new Client({ ...this.connectionConfig, application_name: 'wandermap-notifications' }); }
 
   async onModuleDestroy() {
     await this.pool.end();
