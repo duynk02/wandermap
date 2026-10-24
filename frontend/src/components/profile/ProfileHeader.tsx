@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import { MapPin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,12 +17,14 @@ import {
 } from "./ProfileHeaderActions";
 import { EditProfileDialog } from "./EditProfileDialog";
 import { ThemeSelector } from "@/components/layout/ThemeSelector";
+import { ProfileRelationsDialog } from "./ProfileRelationsDialog";
 
 interface ProfileHeaderProps {
   profile: Profile;
 }
 
 export function ProfileHeader({ profile }: ProfileHeaderProps) {
+  const [relation, setRelation] = useState<"followers" | "following" | null>(null);
   const { user, profile: authProfile, isLoading } = useAuth();
   const isOwner = user?.id === profile.id;
   const followingQuery = useQuery({
@@ -123,19 +126,20 @@ export function ProfileHeader({ profile }: ProfileHeaderProps) {
 
         {/* Follow counts */}
         <div className="mt-4 flex gap-6 text-sm">
-          <div>
+          <button type="button" onClick={() => setRelation("followers")} className="rounded-lg text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
             <span className="font-bold text-white">
               {current.followers_count}
             </span>
             <span className="ml-1 text-brand-300">người theo dõi</span>
-          </div>
-          <div>
+          </button>
+          <button type="button" onClick={() => setRelation("following")} className="rounded-lg text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
             <span className="font-bold text-white">
               {current.following_count}
             </span>
             <span className="ml-1 text-brand-300">đang theo dõi</span>
-          </div>
+          </button>
         </div>
+        {relation && <ProfileRelationsDialog username={current.username} relation={relation} onClose={() => setRelation(null)} />}
       </div>
     </header>
   );

@@ -14,6 +14,8 @@ import { FollowButton, FollowedBadge } from "@/components/post/FollowButton";
 import { QUERY_KEYS, ROUTES } from "@/constants";
 import { cn, formatCount, getAvatarUrl, getPostImageUrl, timeAgo } from "@/lib/utils";
 import type { Post } from "@/types";
+import { ShareContentButton } from "@/components/messaging/ShareContentButton";
+import { postShareTarget } from "@/lib/messaging/share";
 
 const MAX_VISIBLE_IMAGES = 4;
 
@@ -162,7 +164,7 @@ export function FeedPostCard({ post }: { post: Post }) {
             )}
 
             {/* Actions. Buttons only: nothing here navigates, so tapping them can never open the detail page. */}
-            <div className="flex items-center gap-5 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-4 px-4 py-3">
                 <button
                     type="button"
                     onClick={handleLike}
@@ -193,6 +195,7 @@ export function FeedPostCard({ post }: { post: Post }) {
                 <button type="button" aria-label={saved ? "Bỏ lưu bài đăng" : "Lưu bài đăng"} aria-pressed={saved} disabled={saveMutation.isPending} onClick={() => { if (requireAuth("Đăng nhập để lưu bài đăng")) saveMutation.mutate(!saved); }} className="flex min-h-11 items-center gap-1.5 text-sm text-ink-muted hover:text-brand-500">
                     <Bookmark className={cn("h-5 w-5", saved && "fill-brand-500 text-brand-500")} />{formatCount(savesCount)}
                 </button>
+                <ShareContentButton target={postShareTarget(post)} iconOnly />
                 <Link href={ROUTES.post(post.id)} className="ml-auto text-xs font-medium text-brand-500 hover:text-brand-600">
                     Xem chi tiết
                 </Link>

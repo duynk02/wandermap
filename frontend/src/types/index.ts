@@ -36,6 +36,16 @@ export interface Profile {
   created_at: string;
   /** Only present on GET /users/:username when the viewer is logged in. */
   is_following?: boolean;
+  follows_you?: boolean;
+  is_mutual?: boolean;
+  can_message?: boolean;
+}
+
+export interface UserRelation extends Pick<Profile, "id" | "username" | "display_name" | "avatar_url" | "bio" | "followers_count"> {
+  is_following: boolean;
+  follows_you: boolean;
+  is_mutual: boolean;
+  can_message: boolean;
 }
 
 /** Authenticated profile as returned by login/register and GET /users/me. */
@@ -260,3 +270,4 @@ export interface NotificationItem {
   is_unread: boolean;
   created_at: string;
 }
+export * from "./messaging";

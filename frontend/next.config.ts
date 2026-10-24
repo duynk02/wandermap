@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 
 // Full API base URL incl. /api/v1 (server-side only). Used for SSR calls and as the proxy target.
 // NOTE: rewrite destinations are resolved at build time, so set this before `next build`.
@@ -47,4 +48,10 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default function config(phase: string): NextConfig {
+  return {
+    ...nextConfig,
+    // Production builds clear their output; keep the running dev server's files separate.
+    distDir: phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next",
+  };
+}

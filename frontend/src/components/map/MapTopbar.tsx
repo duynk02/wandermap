@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Search, MapPin, PlusCircle, User, Loader2, X, Newspaper } from "lucide-react";
+import { Search, MapPin, PlusCircle, User, Loader2, X, Newspaper, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
 import { useAuth } from "@/hooks/useAuth";
+import { useMessagingUnreadCount } from "@/hooks/useMessagingNavigation";
 import { searchPlaces } from "@/lib/api";
 import { useMapStore } from "@/stores/mapStore";
 import { LOCATION_CATEGORIES, ROUTES } from "@/constants";
@@ -24,6 +25,7 @@ const iconOf = (category: string) =>
 
 export function MapTopbar() {
   const { isAuthenticated, profile } = useAuth();
+  const unreadConversations = useMessagingUnreadCount();
   const setFlyToTarget = useMapStore((state) => state.setFlyToTarget);
   const setSearchPin = useMapStore((state) => state.setSearchPin);
   const setSelectedLocation = useMapStore((state) => state.setSelectedLocation);
@@ -306,21 +308,35 @@ export function MapTopbar() {
       </div>
 
       {/* Actions */}
-      <div className="flex w-full shrink-0 items-center justify-end gap-2 md:w-auto">
+      <div className="flex w-full shrink-0 items-center justify-end gap-1 sm:gap-2 md:w-auto">
         <ThemeSelector className="rounded-2xl bg-white/95 text-ink shadow-lg backdrop-blur-sm hover:bg-surface-muted dark:bg-surface-elevated/95" />
         <Link
           href={ROUTES.feed}
           aria-label="Bản tin cộng đồng"
-          className="flex items-center gap-2 rounded-2xl bg-white/95 px-4 py-3 text-sm font-semibold text-ink shadow-lg backdrop-blur-sm transition-colors hover:bg-white dark:bg-surface-elevated/95"
+          className="flex h-11 w-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-white/95 text-sm font-semibold text-ink shadow-lg backdrop-blur-sm transition-colors hover:bg-white dark:bg-surface-elevated/95 sm:w-auto sm:px-4"
         >
           <Newspaper className="h-4 w-4" />
           <span className="hidden sm:inline">Bản tin</span>
+        </Link>
+        <Link
+          href={ROUTES.messages}
+          aria-label={unreadConversations > 0 ? `Tin nhắn, ${unreadConversations} cuộc trò chuyện chưa đọc` : "Tin nhắn"}
+          title="Tin nhắn"
+          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/95 text-ink shadow-lg backdrop-blur-sm transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:bg-surface-elevated/95"
+        >
+          <MessageCircle className="h-5 w-5" aria-hidden />
+          {unreadConversations > 0 && (
+            <span aria-hidden className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-surface">
+              {unreadConversations > 99 ? "99+" : unreadConversations}
+            </span>
+          )}
         </Link>
         {isAuthenticated ? (
           <>
             <NotificationBell className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/95 text-ink shadow-lg backdrop-blur-sm transition-colors hover:bg-white dark:bg-surface-elevated/95" />
             <Link
               href={ROUTES.newPost}
+              aria-label="Đăng bài"
               className="flex items-center gap-2 rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-brand-600"
             >
               <PlusCircle className="h-4 w-4" />

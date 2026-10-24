@@ -9,7 +9,32 @@ frontend refetch REST cho list/unread. Áp dụng migrations 010–012 trước 
 bản mới; xem [contract, triển khai và kiểm thử](../docs/phase-3-step-2.md). Recovery/replay
 chưa triển khai.
 
-> **Trạng thái tích hợp:** backend được thêm vào repository nhưng frontend Next.js hiện tại vẫn còn Supabase imports/API routes. Chưa chuyển frontend sang API mới trong phạm vi này. Không xóa Supabase project cũ cho đến khi hoàn tất đồng bộ frontend và kế hoạch chuyển dữ liệu.
+Phase 4 Feature 1 bổ sung schema direct conversations/messages, sender-scoped
+idempotency key, thứ tự sequence và read cursor. Chạy migration 013 khi triển khai.
+Xem [thiết kế, protocol SQL và kiểm thử PostgreSQL](../docs/phase-4-feature-1.md).
+
+Phase 4 Feature 2 có Messaging REST API, cursor pagination, authorization, read/unread,
+idempotency và block nhắn tin tối thiểu (migration 014). Frontend có wrappers/types;
+xem [API contract, policy và kiểm thử](../docs/phase-4-feature-2.md).
+
+Phase 4 Feature 3 tích hợp message/read/conversation events sau commit vào namespace
+`/realtime`, user-room fanout và frontend REST reconciliation khi reconnect.
+Xem [event contract, cache synchronization và multi-tab tests](../docs/phase-4-feature-3.md).
+
+Phase 4 Features 4–5 bổ sung [giao diện messaging](../docs/phase-4-feature-4.md) và
+[chia sẻ Post/Location/Journey qua chat](../docs/phase-4-feature-5.md). Tái sử dụng
+messaging REST và per-viewer resource policy; caption được giới hạn theo Unicode
+code points để khớp PostgreSQL `char_length`. Không cần migration sau 014 cho UI/share.
+
+Messaging hiện yêu cầu theo dõi qua lại khi tạo hội thoại hoặc gửi tin mới.
+`GET /conversations/contacts` cung cấp bạn bè (`kind=friends`, mặc định), kể cả
+người chưa từng chat, hoặc người đang chờ theo dõi lại (`kind=followers`);
+API followers/following trả thêm trạng thái quan hệ theo viewer. Hủy theo dõi giữ
+lịch sử và khóa gửi mới; xem [hợp đồng, đồng bộ và kiểm thử](../docs/phase-4-mutual-follow.md).
+
+Phase 4 Steps 6–7 hoàn thiện read/unread UX, conversation ordering, scroll restoration
+và xác minh frontend qua REST/Socket.IO/PostGIS thật, gồm multi-user/device và hồi
+quy Phase 3 Notifications. Xem [kết quả, security review và cách chạy lại](../docs/phase-4-steps-6-7.md).
 
 ## Yêu cầu
 
@@ -214,6 +239,10 @@ Suite không đọc DATABASE_URL ứng dụng; tạo schema tạm trong transact
 rollback toàn bộ. Thiếu biến test URL thì suite được skip. Không cần dependency mới.
 
 SQL migration ở `src/database/migrations/` là append-only. Runner dùng PostgreSQL advisory lock, chạy mỗi migration trong transaction và lưu SHA-256 checksum trong `schema_migrations`. Nếu file migration đã áp dụng bị sửa, runner dừng để tránh drift; hãy tạo migration mới thay vì chỉnh migration cũ.
+
+Nếu messaging báo `relation "conversation_participants" does not exist`, kiểm tra `npm run db:migrate:status` rồi chạy `npm run db:migrate` từ `backend/`; database ứng dụng cần cả migrations 013 và 014. Khởi động backend và chờ health trả thành công trước khi mở frontend để tránh proxy `ECONNREFUSED` trong lúc API chưa lắng nghe.
+
+Một số migration được cố định LF trong `.gitattributes` để giữ nguyên SHA-256 khi checkout trên Windows. Nếu runner báo checksum khác, đối chiếu bytes với bản đã áp dụng; chỉ khôi phục line endings khi đã xác minh nội dung khớp checksum cũ. Không cập nhật checksum trong `schema_migrations` để bỏ qua thay đổi SQL.
 
 `docker compose down` giữ dữ liệu trong volume. Chỉ dùng `docker compose down -v` khi chắc chắn muốn xóa hoàn toàn database local.
 

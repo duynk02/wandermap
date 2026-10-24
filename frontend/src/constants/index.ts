@@ -40,6 +40,15 @@ export const LOCATION_CATEGORIES: {
 
 // Query keys for TanStack Query
 export const QUERY_KEYS = {
+  messaging: {
+    all: ["messaging"] as const,
+    viewer: (viewer: string) => ["messaging", viewer] as const,
+    conversations: (viewer: string) => ["messaging", viewer, "conversations"] as const,
+    conversation: (viewer: string, id: string) => ["messaging", viewer, "conversation", id] as const,
+    messages: (viewer: string, id: string) => ["messaging", viewer, "messages", id] as const,
+    unreadCount: (viewer: string) => ["messaging", viewer, "unread-count"] as const,
+    contacts: (viewer: string, search: string, kind: "friends" | "followers" = "friends") => ["messaging", viewer, "contacts", kind, search] as const,
+  },
   travelMap: {
     all: ["travel-map"] as const,
     data: (username: string, viewer: string, filters: object) => ["travel-map", username, viewer, filters] as const,
@@ -82,6 +91,7 @@ export const QUERY_KEYS = {
   },
 
   profiles: {
+    relations: (username: string, relation: string, viewer: string) => ["profiles", username, "relations", viewer, relation] as const,
     byUsername: (username: string) => ["profiles", username] as const,
     me: ["profiles", "me"] as const,
   },
@@ -92,6 +102,8 @@ export const ROUTES = {
   home: "/",
   explore: "/explore",
   feed: "/feed",
+  messages: "/messages",
+  conversation: (id: string) => `/messages/${id}`,
   notifications: "/notifications",
   login: "/auth/login",
   register: "/auth/register",

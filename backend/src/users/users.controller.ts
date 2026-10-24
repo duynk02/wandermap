@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, Param, ParseUUIDPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiTags } from '@nestjs/swagger';
 import { IsIn } from 'class-validator';
 import { AccessTokenGuard } from '../common/guards/access-token.guard';
@@ -7,6 +7,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../common/interfaces';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UsersService } from './users.service';
+import { RelationsQueryDto } from './dto/relations-query.dto';
 
 class PinDto { @ApiProperty({ enum: ['visited', 'wishlist'] }) @IsIn(['visited', 'wishlist']) status!: 'visited' | 'wishlist'; }
 @ApiTags('Users')
@@ -44,18 +45,19 @@ export class UsersController {
   @Delete(':username/follow') @UseGuards(AccessTokenGuard) @ApiBearerAuth()
   unfollow(@CurrentUser() user: AuthenticatedUser, @Param('username') username: string) { return this.users.unfollow(user.sub, username); }
 
-  @Get(':username/followers')
-  followers(@Param('username') username: string, @Query('page', new ParseIntPipe({ optional: true })) page = 1, @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize = 20) {
-    return this.users.listRelations(username, 'followers', page, pageSize);
+  @Get(':username/followers') @UseGuards(OptionalAccessTokenGuard) @Header('Cache-Control', 'private, no-store')
+  followers(@Param('username') username: string, @Query() query: RelationsQueryDto, @CurrentUser() user?: AuthenticatedUser) {
+    return this.users.listRelations(username, 'followers', query.page, query.pageSize, user?.sub);
   }
 
-  @Get(':username/following')
-  following(@Param('username') username: string, @Query('page', new ParseIntPipe({ optional: true })) page = 1, @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize = 20) {
-    return this.users.listRelations(username, 'following', page, pageSize);
+  @Get(':username/following') @UseGuards(OptionalAccessTokenGuard) @Header('Cache-Control', 'private, no-store')
+  following(@Param('username') username: string, @Query() query: RelationsQueryDto, @CurrentUser() user?: AuthenticatedUser) {
+    return this.users.listRelations(username, 'following', query.page, query.pageSize, user?.sub);
   }
 
   @Get(':username')
   @UseGuards(OptionalAccessTokenGuard)
+  @Header('Cache-Control', 'private, no-store')
   @ApiOperation({ summary: 'Get a public user profile by username' })
   getPublicProfile(@Param('username') username: string, @CurrentUser() user?: AuthenticatedUser) {
     return this.users.getByUsername(username, user?.sub);

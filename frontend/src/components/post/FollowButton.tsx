@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useFollowStore } from "@/stores/followStore";
 import { cn } from "@/lib/utils";
+import { useRelationshipRefresh } from "@/hooks/useRelationshipRefresh";
 
 /**
  * Single source of truth for "does the signed-in user follow this author?".
@@ -49,6 +50,7 @@ export function FollowButton({
   initiallyFollowing,
   className,
 }: FollowProps & { className?: string }) {
+  const refreshRelationships = useRelationshipRefresh();
   const requireAuth = useRequireAuth();
   const setFollowing = useFollowStore((state) => state.setFollowing);
   const { key, hidden, followed } = useFollowState(authorId, initiallyFollowing);
@@ -57,6 +59,7 @@ export function FollowButton({
     mutationFn: () => followUser(username),
     onSuccess: (result) => {
       if (key) setFollowing(key, true);
+      refreshRelationships();
       // changed === false: already following (the API is idempotent). Only the label syncs.
       if (result.changed) toast.success(`Đã theo dõi ${displayName}`);
     },
@@ -89,6 +92,7 @@ export function FollowButton({
  * (a click here must never navigate).
  */
 export function FollowedBadge({ authorId, username, displayName, initiallyFollowing }: FollowProps) {
+  const refreshRelationships = useRelationshipRefresh();
   const setFollowing = useFollowStore((state) => state.setFollowing);
   const { key, hidden, followed } = useFollowState(authorId, initiallyFollowing);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -98,6 +102,7 @@ export function FollowedBadge({ authorId, username, displayName, initiallyFollow
     onSuccess: () => {
       // The badge unmounts once the state flips, which also closes the dialog.
       if (key) setFollowing(key, false);
+      refreshRelationships();
       setConfirmOpen(false);
       toast.success(`Đã hủy theo dõi ${displayName}`);
     },

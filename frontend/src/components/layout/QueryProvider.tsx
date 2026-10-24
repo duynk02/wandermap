@@ -3,8 +3,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   // Create client inside component to avoid sharing state between requests on server
   const [queryClient] = useState(
     () =>
@@ -23,7 +25,8 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      {process.env.NODE_ENV === "development" && (
+      {/* The floating launcher overlaps the mobile message send button. */}
+      {process.env.NODE_ENV === "development" && !pathname.startsWith("/messages") && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}
     </QueryClientProvider>

@@ -4,6 +4,8 @@ import { LOCATION_CATEGORIES, ROUTES } from "@/constants";
 import { cn, formatDate, getAvatarUrl, timeAgo } from "@/lib/utils";
 import type { Post } from "@/types";
 import { JourneyPostCard } from "@/components/journey/JourneyPostCard";
+import { ShareContentButton } from "@/components/messaging/ShareContentButton";
+import { postShareTarget } from "@/lib/messaging/share";
 
 const VISIBILITY_LABEL: Record<string, string> = {
   followers: "Chỉ người theo dõi",
@@ -115,6 +117,7 @@ export function PostDetail({ post }: { post: Post }) {
             </div>
 
             <p className="whitespace-pre-wrap leading-relaxed text-ink">{post.content}</p>
+            <div className="mt-4 border-t border-border pt-3"><ShareContentButton target={postShareTarget(post)} /></div>
           </div>
         </article>
       </div>
