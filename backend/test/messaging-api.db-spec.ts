@@ -13,6 +13,7 @@ import { DatabaseModule } from '../src/database/database.module';
 import { DatabaseService } from '../src/database/database.service';
 import { MessagingModule } from '../src/messaging/messaging.module';
 import { MessagingPolicyService } from '../src/messaging/messaging-policy.service';
+import { UsersModule } from '../src/users/users.module';
 import type { ConversationDto, MessageDto } from '../src/messaging/messaging.types';
 
 // Real HTTP/guards/validation and committed independent PostgreSQL transactions.
@@ -44,6 +45,8 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
   const counts = (actor = recipient) => request(http()).get(`${base}/unread-count`).set('Authorization', token(actor));
   const conversation = async (target = recipient, actor = owner): Promise<ConversationDto> => (await start(target, actor).expect(201)).body.conversation;
   const createMessage = async (id: string, extra: object = {}, actor = owner): Promise<MessageDto> => (await send(id, extra, actor).expect(201)).body.message;
+  const username = (id: string) => `msg_${id.replaceAll('-', '').slice(0, 20)}`;
+  const followRequest = (target: string, actor = owner, following = true) => request(http())[following ? 'post' : 'delete'](`/api/v1/users/${username(target)}/follow`).set('Authorization', token(actor));
 
   beforeAll(async () => {
     const setup = new Client({ connectionString: databaseUrl, connectionTimeoutMillis: 5000 });
@@ -64,7 +67,7 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
     pool = new Pool({ connectionString: databaseUrl, options: `-c search_path=${schema},public`, max: 12 });
     const module = await Test.createTestingModule({ imports: [
       ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, skipProcessEnv: true, load: [() => ({ JWT_ACCESS_SECRET: secret })] }),
-      ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]), DatabaseModule, MessagingModule,
+      ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]), DatabaseModule, MessagingModule, UsersModule,
     ] }).overrideProvider(DatabaseService).useValue({
       query: (sql: string, values: unknown[]) => pool.query(sql, values),
       transaction: async <T>(work: (client: PoolClient) => Promise<T>) => {
@@ -99,6 +102,9 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
     for (const id of [location, otherLocation]) {
       await pool.query("INSERT INTO locations (id, name, address, coordinates) VALUES ($1, 'Đà Lạt', 'Lâm Đồng', ST_SetSRID(ST_MakePoint(108.44, 11.94), 4326))", [id]);
     }
+    await pool.query(`INSERT INTO follows (follower_id, following_id)
+      SELECT a.id, b.id FROM users a CROSS JOIN users b WHERE a.id = ANY($1::uuid[])
+        AND b.id = ANY($1::uuid[]) AND a.id <> b.id`, [[owner, recipient, outsider, fourth]]);
     await pool.query(`INSERT INTO posts (id, author_id, location_id, content, images, rating, visited_at)
       VALUES ($1, $2, $3, 'Bài viết du lịch', ARRAY['https://example.test/post.webp'], 5, '2026-10-23')`, [post, owner, location]);
   });
@@ -142,6 +148,128 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
     expect(result.body).toMatchObject({ id, recipient: { id: recipient, is_active: true }, can_send: true, last_message: null, unread_count: 0 });
     expect(Object.keys(result.body.recipient).sort()).toEqual(['avatar_url', 'display_name', 'id', 'is_active', 'username']);
     expect(JSON.stringify(result.body)).not.toMatch(/password_hash|email|token|direct_user/);
+  });
+
+  it('requires mutual follows for a new direct chat in both directions', async () => {
+    await pool.query('DELETE FROM follows WHERE follower_id = $1 OR following_id = $1', [owner]);
+    expect((await start().expect(403)).body.code).toBe('MUTUAL_FOLLOW_REQUIRED');
+    await followRequest(recipient).expect(201);
+    await start().expect(403);
+    await start(owner, recipient).expect(403);
+    expect((await pool.query('SELECT count(*)::int AS n FROM conversations WHERE direct_user_low_id = $1 OR direct_user_high_id = $1', [owner])).rows[0].n).toBe(0);
+    await followRequest(owner, recipient).expect(201);
+    expect((await start().expect(201)).body.conversation).toMatchObject({ can_send: true, is_mutual: true });
+  });
+
+  it('keeps history and idempotent committed retries after unfollow but rejects every new message type', async () => {
+    const chat = await conversation();
+    const key = randomUUID();
+    const committed = await createMessage(chat.id, { client_message_id: key });
+    await followRequest(owner, recipient, false).expect(200);
+    expect((await detail(chat.id).expect(200)).body).toMatchObject({ can_send: false, is_mutual: false });
+    expect((await history(chat.id, recipient).expect(200)).body.data[0].id).toBe(committed.id);
+    for (const actor of [owner, recipient]) {
+      await send(chat.id, {}, actor).expect(403);
+      for (const message_type of ['shared_post', 'shared_location', 'shared_journey']) {
+        expect((await send(chat.id, { message_type, shared_resource_id: post, content: null }, actor).expect(403)).body.code).toBe('MUTUAL_FOLLOW_REQUIRED');
+      }
+    }
+    expect((await send(chat.id, { client_message_id: key }).expect(201)).body).toMatchObject({ created: false, message: { id: committed.id } });
+    await read(chat.id, committed.sequence).expect(200);
+    await followRequest(owner, recipient).expect(201);
+    expect((await start().expect(201)).body.conversation.id).toBe(chat.id);
+    await createMessage(chat.id);
+  });
+
+  it('lists paginated mutual contacts without creating empty conversations and filters blocks, inactivity and search', async () => {
+    await request(http()).get(`${base}/contacts`).expect(401);
+    const contacts = () => request(http()).get(`${base}/contacts`).set('Authorization', token());
+    const all = await contacts().expect(200);
+    expect(all.headers['cache-control']).toBe('private, no-store');
+    expect(new Set(all.body.data.map((row: { id: string }) => row.id))).toEqual(new Set([recipient, outsider, fourth]));
+    expect(all.body.data.every((row: { conversation_id: string | null }) => row.conversation_id === null)).toBe(true);
+    const one = await contacts().query({ pageSize: 1 }).expect(200);
+    expect(one.body).toMatchObject({ hasMore: true, next_page: 2 });
+    const two = await contacts().query({ pageSize: 1, page: 2 }).expect(200);
+    expect(two.body.data[0].id).not.toBe(one.body.data[0].id);
+    const chat = await conversation();
+    expect((await contacts().query({ search: username(recipient) }).expect(200)).body.data).toEqual([expect.objectContaining({ id: recipient, conversation_id: chat.id })]);
+    await pool.query('UPDATE profiles SET display_name = $2 WHERE id = $1', [recipient, 'Nguyễn Ánh']);
+    expect((await contacts().query({ search: 'nguyen anh' }).expect(200)).body.data[0].id).toBe(recipient);
+    await block(outsider).expect(200);
+    await followRequest(owner, fourth, false).expect(200);
+    expect((await contacts().expect(200)).body.data.map((row: { id: string }) => row.id)).toEqual([recipient]);
+    await pool.query('UPDATE users SET is_active = false WHERE id = $1', [recipient]);
+    expect((await contacts().expect(200)).body.data).toEqual([]);
+    for (const query of [{ page: 0 }, { pageSize: 51 }, { search: 'x'.repeat(101) }, { viewer: outsider }, { kind: 'invalid' }]) await contacts().query(query).expect(400);
+  });
+
+  it('paginates incoming followers separately from friends and excludes outgoing-only, inactive and blocked users', async () => {
+    const followers = () => request(http()).get(`${base}/contacts`).query({ kind: 'followers' }).set('Authorization', token());
+    await request(http()).get(`${base}/contacts`).query({ kind: 'followers' }).expect(401);
+    expect((await followers().expect(200)).body.data).toEqual([]);
+    await pool.query('DELETE FROM follows WHERE follower_id = $1', [owner]);
+    await pool.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $2)', [inactive, owner]);
+    const all = await followers().expect(200);
+    expect(new Set(all.body.data.map((row: { id: string }) => row.id))).toEqual(new Set([recipient, outsider, fourth]));
+    expect(all.headers['cache-control']).toBe('private, no-store');
+    const first = await followers().query({ pageSize: 1 }).expect(200);
+    const second = await followers().query({ pageSize: 1, page: 2 }).expect(200);
+    expect(first.body).toMatchObject({ hasMore: true, next_page: 2 });
+    expect(first.body.data[0].id).not.toBe(second.body.data[0].id);
+    await pool.query('UPDATE profiles SET display_name = $2 WHERE id = $1', [outsider, 'Nguyễn Ánh']);
+    expect((await followers().query({ search: 'nguyen anh' }).expect(200)).body.data.map((row: { id: string }) => row.id)).toEqual([outsider]);
+    await followRequest(owner, recipient, false).expect(200);
+    await followRequest(recipient).expect(201);
+    await block(fourth).expect(200);
+    expect((await followers().expect(200)).body.data.map((row: { id: string }) => row.id)).toEqual([outsider]);
+    await block(owner, outsider).expect(200);
+    expect((await followers().expect(200)).body.data).toEqual([]);
+  });
+
+  it('moves a follower into friends only after follow-back commits, without pre-creating a conversation', async () => {
+    const contacts = (kind: 'friends' | 'followers') => request(http()).get(`${base}/contacts`).query({ kind }).set('Authorization', token());
+    await pool.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [owner, recipient]);
+    const ids = (response: request.Response) => response.body.data.map((row: { id: string }) => row.id);
+    expect(ids(await contacts('followers').expect(200))).toContain(recipient);
+    expect(ids(await contacts('friends').expect(200))).not.toContain(recipient);
+    await start().expect(403);
+    failCommit = true;
+    await followRequest(recipient).expect(400);
+    expect(ids(await contacts('followers').expect(200))).toContain(recipient);
+    expect(ids(await contacts('friends').expect(200))).not.toContain(recipient);
+    await followRequest(recipient).expect(201);
+    expect(ids(await contacts('followers').expect(200))).not.toContain(recipient);
+    expect(ids(await contacts('friends').expect(200))).toContain(recipient);
+    expect((await pool.query('SELECT count(*)::int AS n FROM conversations WHERE direct_user_low_id = $1 OR direct_user_high_id = $1', [owner])).rows[0].n).toBe(0);
+    await start().expect(201);
+  });
+
+  it('returns relation actions for the signed-in viewer, including when viewing somebody else\'s list', async () => {
+    await pool.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [owner, outsider]);
+    const relations = (profile = owner, actor?: string) => {
+      const req = request(http()).get(`/api/v1/users/${username(profile)}/followers`);
+      return actor ? req.set('Authorization', token(actor)) : req;
+    };
+    const own = await relations(owner, owner).expect(200);
+    expect(own.body.data.find((row: { id: string }) => row.id === outsider)).toMatchObject({ is_following: false, follows_you: true, is_mutual: false, can_message: false });
+    expect(own.body.data.find((row: { id: string }) => row.id === recipient)).toMatchObject({ is_following: true, follows_you: true, is_mutual: true, can_message: true });
+    const another = await relations(recipient, owner).expect(200);
+    expect(another.body.data.find((row: { id: string }) => row.id === outsider).can_message).toBe(false);
+    const following = await request(http()).get(`/api/v1/users/${username(owner)}/following`).set('Authorization', token()).expect(200);
+    expect(following.body.data.map((row: { id: string }) => row.id)).not.toContain(outsider);
+    expect(following.body.data.find((row: { id: string }) => row.id === recipient)).toMatchObject({ can_message: true, is_mutual: true });
+    expect((await relations().expect(200)).body.data.every((row: { can_message: boolean }) => !row.can_message)).toBe(true);
+    const page = await relations(owner, owner).query({ pageSize: 1 }).expect(200);
+    expect(page.body).toMatchObject({ page: 1, pageSize: 1, hasMore: true, count: 3 });
+    await followRequest(outsider).expect(201);
+    expect((await relations(owner, owner).expect(200)).body.data.find((row: { id: string }) => row.id === outsider).can_message).toBe(true);
+    await block(outsider).expect(200);
+    expect((await relations(owner, owner).expect(200)).body.data.find((row: { id: string }) => row.id === outsider)).toMatchObject({ is_mutual: true, can_message: false });
+    await pool.query('UPDATE users SET is_active = false WHERE id = $1', [fourth]);
+    expect((await relations(owner, owner).expect(200)).body.count).toBe(2);
+    await relations(owner, owner).query({ page: -1 }).expect(400);
+    await relations(owner, owner).query({ pageSize: 51 }).expect(400);
   });
 
   it('rejects self chats, missing/inactive recipients and participant injection', async () => {
@@ -462,7 +590,7 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
 
   it('rechecks the sending viewer after access is revoked and never reveals cached post metadata', async () => {
     await pool.query("UPDATE posts SET visibility = 'followers', author_id = $2 WHERE id = $1", [post, outsider]);
-    await pool.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $3), ($2, $3)', [owner, recipient, outsider]);
+    await pool.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $3), ($2, $3) ON CONFLICT DO NOTHING', [owner, recipient, outsider]);
     const chat = await conversation();
     const key = randomUUID();
     const message = await createMessage(chat.id, { message_type: 'shared_post', shared_resource_id: post, content: null, client_message_id: key });
@@ -477,11 +605,12 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
 
   it('requires visibility for both sender and recipient, including followers-only posts', async () => {
     const chat = await conversation();
-    await pool.query("UPDATE posts SET visibility = 'followers' WHERE id = $1", [post]);
+    await pool.query("UPDATE posts SET visibility = 'followers', author_id = $2 WHERE id = $1", [post, outsider]);
+    await pool.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [recipient, outsider]);
     await send(chat.id, { message_type: 'shared_post', shared_resource_id: post, content: null }).expect(404);
-    await pool.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $2)', [recipient, owner]);
+    await pool.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $2)', [recipient, outsider]);
     await createMessage(chat.id, { message_type: 'shared_post', shared_resource_id: post, content: null });
-    await pool.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [recipient, owner]);
+    await pool.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [recipient, outsider]);
     expect((await detail(chat.id, recipient).expect(200)).body.last_message.shared_resource).toMatchObject({ available: false, title: null });
     await pool.query("UPDATE posts SET visibility = 'private', author_id = $2 WHERE id = $1", [post, outsider]);
     await send(chat.id, { message_type: 'shared_post', shared_resource_id: post, content: null }).expect(404);
@@ -546,7 +675,10 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
     expect((await detail(chat.id, recipient).expect(200)).body.last_message.shared_resource.available).toBe(false);
   });
 
-  it.each(['block', 'send'])('serializes a simultaneous block/send decision (first: %s)', async (firstOperation) => {
+  it.each([
+    { policyChange: 'block', firstOperation: 'policy' }, { policyChange: 'block', firstOperation: 'send' },
+    { policyChange: 'unfollow', firstOperation: 'policy' }, { policyChange: 'unfollow', firstOperation: 'send' },
+  ])('serializes simultaneous $policyChange/send (first: $firstOperation)', async ({ policyChange, firstOperation }) => {
     const chat = await conversation();
     const policy = app.get(MessagingPolicyService);
     const original = policy.lockPair.bind(policy);
@@ -560,9 +692,10 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
     });
     let firstRequest: Promise<request.Response> | undefined, secondRequest: Promise<request.Response> | undefined;
     try {
-      firstRequest = (firstOperation === 'block' ? block() : send(chat.id)).then((response) => response);
+      const change = () => policyChange === 'block' ? block() : followRequest(recipient, owner, false);
+      firstRequest = (firstOperation === 'policy' ? change() : send(chat.id)).then((response) => response);
       await locked;
-      secondRequest = (firstOperation === 'block' ? send(chat.id) : block()).then((response) => response);
+      secondRequest = (firstOperation === 'policy' ? send(chat.id) : change()).then((response) => response);
       const deadline = Date.now() + 3000;
       let waiting = false;
       while (!waiting && Date.now() < deadline) {
@@ -574,9 +707,9 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
       expect(waiting).toBe(true);
       release();
       const [one, two] = await Promise.all([firstRequest, secondRequest]);
-      expect(one.status).toBe(firstOperation === 'block' ? 200 : 201);
-      expect(two.status).toBe(firstOperation === 'block' ? 403 : 200);
-      expect((await history(chat.id).expect(200)).body.data).toHaveLength(firstOperation === 'block' ? 0 : 1);
+      expect(one.status).toBe(firstOperation === 'policy' ? 200 : 201);
+      expect(two.status).toBe(firstOperation === 'policy' ? 403 : 200);
+      expect((await history(chat.id).expect(200)).body.data).toHaveLength(firstOperation === 'policy' ? 0 : 1);
       await send(chat.id).expect(403);
     } finally {
       release();

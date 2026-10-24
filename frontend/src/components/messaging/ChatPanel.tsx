@@ -17,7 +17,6 @@ import {
   CircleAlert,
   Loader2,
   Send,
-  UserRound,
   WifiOff,
 } from "lucide-react";
 import { ROUTES } from "@/constants";
@@ -40,6 +39,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useRealtimeStore } from "@/stores/realtimeStore";
 import { SharedContentCard } from "./SharedContentCard";
+import { ConversationActions } from "./ConversationActions";
 import type { ChatMessage, Conversation } from "@/types/messaging";
 import {
   MessagingAvatar,
@@ -297,14 +297,7 @@ export function ChatPanel({
                 @{conversation.recipient.username}
               </p>
             </div>
-            <Link
-              href={ROUTES.profile(conversation.recipient.username)}
-              aria-label={`Mở hồ sơ ${conversation.recipient.display_name}`}
-              title="Mở hồ sơ"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink-muted hover:bg-surface-muted"
-            >
-              <UserRound className="h-5 w-5" aria-hidden />
-            </Link>
+            <ConversationActions key={conversation.id} viewer={viewer} conversation={conversation} />
           </>
         ) : (
           <h2 className="text-base font-semibold text-ink">Cuộc trò chuyện</h2>
@@ -510,7 +503,9 @@ export function ChatPanel({
                 ? "Người nhận hiện không còn khả dụng."
                 : conversation.blocked_by_me
                   ? "Bạn đã chặn tin nhắn từ tài khoản này."
-                  : "Hiện không thể gửi tin nhắn trong cuộc trò chuyện này."}
+                  : conversation.is_mutual === false
+                    ? "Hai bạn cần theo dõi nhau để tiếp tục nhắn tin. Lịch sử trò chuyện vẫn được giữ lại."
+                    : "Hiện không thể gửi tin nhắn trong cuộc trò chuyện này."}
             </p>
           )}
           <form

@@ -17,7 +17,7 @@ const userId = "11111111-1111-4111-8111-111111111111";
 const recipientId = "22222222-2222-4222-8222-222222222222";
 const conversationId = "33333333-3333-4333-8333-333333333333";
 const secondId = "44444444-4444-4444-8444-444444444444";
-const recipient = { id: recipientId, username: "ban_dong_hanh", display_name: "Bạn đồng hành", avatar_url: null, is_active: true };
+const recipient = { id: recipientId, username: "ban_dong_hanh", display_name: "Bạn đồng hành", avatar_url: null, is_active: true, is_following: true, follows_you: true, is_mutual: true, can_message: true };
 const user = { id: userId, username: "messaging_test", display_name: "Người khám phá", email: "fixture@example.test", avatar_url: null, bio: null, home_city: null, country_count: 0, total_posts: 0, followers_count: 0, following_count: 0, created_at: "2026-01-01T00:00:00Z" };
 const accessToken = `fixture.${Buffer.from(JSON.stringify({ sub: userId, exp: Math.floor(Date.now() / 1000) + 900 })).toString("base64url")}.fixture`;
 const now = () => new Date().toISOString();
@@ -28,7 +28,7 @@ const message = (sequence, content, sender = recipientId, key = randomUUID()) =>
 const messages = Array.from({ length: 60 }, (_, index) => message(index + 1, `Chặng đường ${index + 1}: Hẹn gặp ở Đà Lạt, cùng ngắm bình minh và khám phá một góc phố xanh.`, index % 3 === 0 ? userId : recipientId));
 const conversation = {
   id: conversationId, type: "direct", created_at: "2026-01-01T00:00:00Z", updated_at: now(), last_message_at: now(),
-  recipient, can_send: true, blocked_by_me: false, read_state: { last_read_sequence: "56", last_read_at: now() },
+  recipient, can_send: true, is_mutual: true, blocked_by_me: false, read_state: { last_read_sequence: "56", last_read_at: now() },
   recipient_read_state: { last_read_sequence: "45", last_read_at: now() }, unread_count: 4, last_message: messages.at(-1),
 };
 const second = {
@@ -37,7 +37,7 @@ const second = {
   recipient_read_state: { last_read_sequence: null, last_read_at: null },
 };
 let conversations = [conversation, second];
-let listFailure = false, sendMode = "hold", heldSend = null, connected = 0, refuseConnection = false;
+let listFailure = false, sendMode = "hold", heldSend = null, connected = 0, refuseConnection = false, unfollowMode = "fail";
 const requests = [], mutations = [], exceptions = [], checks = [];
 const fixtureHttp = createServer();
 const fixture = new Server(fixtureHttp, { cors: { origin: new URL(web).origin } });
@@ -100,6 +100,15 @@ try {
     let result = { data: [], count: 0, hasMore: false, page: 1, pageSize: 20 };
     if (path.endsWith("/auth/refresh")) result = { accessToken, expiresIn: 900 };
     else if (path.endsWith("/users/me")) result = user;
+    else if (path.endsWith(`/users/${recipient.username}/follow`) && method === "DELETE") {
+      mutations.push({ path, method, input });
+      if (unfollowMode === "fail") { status = 503; result = { message: "Tạm thời chưa thể hủy theo dõi" }; unfollowMode = "success"; }
+      else {
+        recipient.is_following = false; recipient.is_mutual = false; recipient.can_message = false;
+        conversation.can_send = false; conversation.is_mutual = false;
+        result = { following: false, changed: true };
+      }
+    }
     else if (path.endsWith(`/users/${recipient.username}`)) result = { ...user, ...recipient };
     else if (/\/users\/[^/]+$/.test(path)) { status = 404; result = { message: "Không tìm thấy người dùng" }; }
     else if (path.endsWith("/notifications/unread-count")) result = { count: 0 };
@@ -350,6 +359,47 @@ try {
   await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
   await until(() => evaluate(`!document.querySelector('[role="dialog"]')`), "dialog closes accessibly");
   checks.push("new-conversation dialog searches real profile endpoint");
+
+  await evaluate(`document.querySelector('a[href="/messages/${conversationId}"]').click()`);
+  await until(() => visible('[data-testid="message-composer"]'), "chat actions detail");
+  const unsentDraft = "Bản nháp còn giữ sau khi hủy theo dõi";
+  await setComposer(unsentDraft);
+  const unfollowCount = () => mutations.filter((entry) => entry.method === "DELETE" && entry.path.endsWith("/follow")).length;
+  const clickActionsTrigger = async () => {
+    const point = await evaluate(`(()=>{const r=document.querySelector('button[aria-label="Tùy chọn cuộc trò chuyện"]').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};})()`);
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, button: "left", buttons: 1, clickCount: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, button: "left", buttons: 0, clickCount: 1 });
+  };
+  const openActions = async () => {
+    await clickActionsTrigger();
+    await until(() => evaluate(`!!Array.from(document.querySelectorAll('[role=menuitem]')).find(e=>e.textContent.includes('Hủy theo dõi')&&!e.hasAttribute('data-disabled'))`), "loaded unfollow action");
+  };
+  await openActions();
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[role=menuitem]')).map(e=>e.textContent.trim())`), ["Mở hồ sơ", "Hủy theo dõi"]);
+  assert.equal(await evaluate(`Array.from(document.querySelectorAll('[role=menuitem]')).find(e=>e.textContent.includes('Mở hồ sơ')).getAttribute('href')`), `/profile/${recipient.username}`);
+  assert.equal(await evaluate("location.pathname"), `/messages/${conversationId}`, "opening the menu does not navigate");
+  await capture("mobile-conversation-actions.png");
+  await evaluate(`Array.from(document.querySelectorAll('[role=menuitem]')).find(e=>e.textContent.includes('Hủy theo dõi')).click()`);
+  await until(() => visible('[role=dialog]'), "unfollow confirmation");
+  await clickText("Quay lại");
+  assert.equal(unfollowCount(), 0, "cancel makes no API mutation");
+  await openActions();
+  await evaluate(`Array.from(document.querySelectorAll('[role=menuitem]')).find(e=>e.textContent.includes('Hủy theo dõi')).click()`);
+  await until(() => visible('[role=dialog]'), "unfollow confirmation reopened");
+  await clickText("Hủy theo dõi");
+  await until(() => textIncludes("Tạm thời chưa thể hủy theo dõi"), "failed unfollow feedback");
+  assert.equal(await visible('[role=dialog]'), true, "failed unfollow keeps the confirmation retryable");
+  assert.equal(await evaluate(`document.querySelector('[data-testid="message-composer"]').disabled`), false);
+  await clickText("Hủy theo dõi");
+  await until(() => evaluate(`!document.querySelector('[role=dialog]')&&document.querySelector('[data-testid="message-composer"]').disabled`), "successful unfollow disables composer");
+  assert.equal(await evaluate(`document.querySelector('[data-testid="message-composer"]').value`), unsentDraft);
+  assert.ok(await evaluate(`document.querySelectorAll('[data-testid="message-history"] [data-message-key]').length>0`), "unfollow preserves history");
+  await capture("mobile-unfollowed-conversation.png");
+  await clickActionsTrigger();
+  await until(() => evaluate(`Array.from(document.querySelectorAll('[role=menuitem]')).some(e=>e.textContent.includes('Hủy theo dõi')&&e.hasAttribute('data-disabled'))`), "unfollow disabled after success");
+  await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  checks.push("conversation profile icon opens two actions; unfollow cancel/failure/retry preserve draft and history, then disable sending after success");
 
   conversations = [];
   await send("Page.navigate", { url: `${web}/messages` });

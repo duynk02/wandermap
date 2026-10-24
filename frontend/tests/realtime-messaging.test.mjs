@@ -95,6 +95,19 @@ test("message hints resolve one REST row, dedup paired events and preserve older
   assert.deepEqual(h.client.getQueryData(keys.messages(owner, conversation)).pages[1].data, [oldest]);
 });
 
+test("policy hints refresh contacts and sending permission for the current viewer", async (t) => {
+  const h = harness(t);
+  const contactKey = [...keys.viewer(owner), "contacts", ""];
+  let contactLoads = 0, detailLoads = 0;
+  h.observe(contactKey, { data: [other] }, async () => { contactLoads++; return { data: [] }; });
+  h.observe(keys.conversation(owner, conversation), { can_send: true }, async () => { detailLoads++; return { can_send: false }; });
+  const row = message();
+  h.sync.receive(owner, "conversation:updated", { ...updated(row), reason: "policy", message_id: null });
+  await until(() => contactLoads === 1 && detailLoads === 1);
+  assert.deepEqual(h.client.getQueryData(contactKey), { data: [] });
+  assert.equal(h.client.getQueryData(keys.conversation(owner, conversation)).can_send, false);
+});
+
 test("conversation message hints alone recover a message if the paired message:new hint was missed", async (t) => {
   const row = message("2");
   const h = harness(t, { loadMessage: async () => row });

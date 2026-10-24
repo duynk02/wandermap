@@ -1,5 +1,9 @@
 import type { ChatMessage, Conversation, CursorPage, MessagingUnreadCount, ReadConversationResult, SendMessageInput, SendMessageResult } from "@/types/messaging";
 import { apiFetch } from "./client";
+import type { MessagingContactsKind, MessagingContactsPage } from "@/types/messaging";
+
+export const getMessagingContacts = (page: number, search: string, signal?: AbortSignal, kind: MessagingContactsKind = "friends") =>
+  apiFetch<MessagingContactsPage>("/conversations/contacts", { query: { page, pageSize: 20, search, kind }, signal });
 
 export const getConversations = (query: { cursor?: string; limit?: number } = {}, signal?: AbortSignal) =>
   apiFetch<CursorPage<Conversation>>("/conversations", { query: { ...query }, signal });

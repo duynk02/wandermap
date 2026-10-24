@@ -131,7 +131,7 @@ export function SharedContentCard({
             {resource.author.display_name}
           </p>
         )}
-        <p className="line-clamp-3 break-words text-sm font-medium leading-5 [overflow-wrap:anywhere]">
+        <p className="line-clamp-3 text-sm font-medium leading-5 [overflow-wrap:anywhere]">
           {resource.title || `Xem ${label.toLocaleLowerCase("vi")}`}
         </p>
         {type === "shared_post" && resource.location && (

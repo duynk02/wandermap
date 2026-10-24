@@ -47,6 +47,7 @@ export const QUERY_KEYS = {
     conversation: (viewer: string, id: string) => ["messaging", viewer, "conversation", id] as const,
     messages: (viewer: string, id: string) => ["messaging", viewer, "messages", id] as const,
     unreadCount: (viewer: string) => ["messaging", viewer, "unread-count"] as const,
+    contacts: (viewer: string, search: string, kind: "friends" | "followers" = "friends") => ["messaging", viewer, "contacts", kind, search] as const,
   },
   travelMap: {
     all: ["travel-map"] as const,
@@ -90,6 +91,7 @@ export const QUERY_KEYS = {
   },
 
   profiles: {
+    relations: (username: string, relation: string, viewer: string) => ["profiles", username, "relations", viewer, relation] as const,
     byUsername: (username: string) => ["profiles", username] as const,
     me: ["profiles", "me"] as const,
   },

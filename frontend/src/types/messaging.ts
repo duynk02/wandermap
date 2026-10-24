@@ -46,6 +46,7 @@ export interface Conversation {
   last_message_at: string | null;
   recipient: MessagingProfile & { is_active: boolean };
   can_send: boolean;
+  is_mutual: boolean;
   blocked_by_me: boolean;
   read_state: ConversationReadState;
   recipient_read_state: ConversationReadState;
@@ -58,6 +59,10 @@ export interface CursorPage<T> {
   next_cursor: string | null;
   hasMore: boolean;
 }
+
+export interface MessagingContact extends MessagingProfile { conversation_id: string | null; }
+export type MessagingContactsKind = "friends" | "followers";
+export interface MessagingContactsPage { data: MessagingContact[]; hasMore: boolean; next_page: number | null; }
 
 export type SendMessageInput = { client_message_id: string } & (
   | { message_type: "text"; content: string; shared_resource_id?: never }

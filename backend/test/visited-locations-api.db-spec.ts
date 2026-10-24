@@ -52,6 +52,9 @@ describeDatabase('Visited locations HTTP API with real PostgreSQL/PostGIS', () =
     await db.query("INSERT INTO user_pins (user_id, location_id, status, created_at) VALUES ($1, $2, 'visited', '2020-01-01T00:00:00Z'), ($1, $3, 'wishlist', '2020-02-01T00:00:00Z')", [owner, locations[0], locations[1]]);
     await db.query("INSERT INTO posts (author_id, location_id, content, rating, visited_at) VALUES ($1, $2, 'A post does not imply a visit', 4, '2021-03-04')", [owner, locations[2]]);
     await db.query(await readFile(path.join(directory, cutover), 'utf8'));
+    // Exercise the cutover above, then bring the fixture up to the current API schema.
+    // Public profile relationship fields now also consult messaging_blocks (014).
+    for (const file of files.filter((name) => name > cutover)) await db.query(await readFile(path.join(directory, file), 'utf8'));
     migratedMark = (await db.query<{ id: string }>('SELECT id FROM user_visited_locations WHERE user_id = $1 AND location_id = $2', [owner, locations[0]])).rows[0].id;
 
     const module = await Test.createTestingModule({ imports: [

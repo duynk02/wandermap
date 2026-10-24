@@ -1,4 +1,5 @@
 import { postAccess } from '../posts/post-access';
+import { messagingAllowed, mutualFollow } from './messaging-access';
 
 const PROFILE = `jsonb_build_object('id', a.id, 'username', a.username, 'display_name', a.display_name, 'avatar_url', a.avatar_url)`;
 const UNAVAILABLE = `jsonb_build_object('available', false, 'id', NULL, 'title', NULL, 'image_url', NULL,
@@ -34,8 +35,8 @@ export const CONVERSATION_SELECT = `SELECT jsonb_build_object(
   'id', c.id, 'type', c.type, 'created_at', c.created_at, 'updated_at', c.updated_at, 'last_message_at', c.last_message_at,
   'recipient', jsonb_build_object('id', p.id, 'username', p.username, 'display_name', p.display_name, 'avatar_url', p.avatar_url, 'is_active', u.is_active),
   'blocked_by_me', EXISTS (SELECT 1 FROM messaging_blocks b WHERE b.blocker_id = $1 AND b.blocked_id = p.id),
-  'can_send', u.is_active AND NOT EXISTS (SELECT 1 FROM messaging_blocks b
-    WHERE (b.blocker_id = $1 AND b.blocked_id = p.id) OR (b.blocker_id = p.id AND b.blocked_id = $1)),
+  'is_mutual', ${mutualFollow('$1', 'p.id')},
+  'can_send', u.is_active AND ${messagingAllowed('$1', 'p.id')},
   'read_state', jsonb_build_object('last_read_sequence', cp.last_read_sequence::text, 'last_read_at', cp.last_read_at),
   'recipient_read_state', jsonb_build_object('last_read_sequence', op.last_read_sequence::text, 'last_read_at', op.last_read_at),
   'unread_count', (SELECT count(*)::integer FROM messages unread WHERE unread.conversation_id = c.id

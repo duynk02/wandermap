@@ -27,6 +27,12 @@ Phase 4 Features 4–5 bổ sung [giao diện messaging](../docs/phase-4-feature
 messaging REST và per-viewer resource policy; caption được giới hạn theo Unicode
 code points để khớp PostgreSQL `char_length`. Không cần migration sau 014 cho UI/share.
 
+Messaging hiện yêu cầu theo dõi qua lại khi tạo hội thoại hoặc gửi tin mới.
+`GET /conversations/contacts` cung cấp bạn bè (`kind=friends`, mặc định), kể cả
+người chưa từng chat, hoặc người đang chờ theo dõi lại (`kind=followers`);
+API followers/following trả thêm trạng thái quan hệ theo viewer. Hủy theo dõi giữ
+lịch sử và khóa gửi mới; xem [hợp đồng, đồng bộ và kiểm thử](../docs/phase-4-mutual-follow.md).
+
 > **Trạng thái tích hợp:** backend được thêm vào repository nhưng frontend Next.js hiện tại vẫn còn Supabase imports/API routes. Chưa chuyển frontend sang API mới trong phạm vi này. Không xóa Supabase project cũ cho đến khi hoàn tất đồng bộ frontend và kế hoạch chuyển dữ liệu.
 
 ## Yêu cầu

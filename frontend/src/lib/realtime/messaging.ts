@@ -195,6 +195,7 @@ export function createMessagingSync({ client, keys, getUserId, loadMessage }: {
       const key = `${name}:${event.payload.event_id}`;
       if (seen.has(key)) return false;
       seen.set(key, now + 60_000);
+      if (event.name === "conversation:updated" && event.payload.reason === "policy") full = true;
       if (seen.size > 512) seen.delete(seen.keys().next().value!);
       let ids = pending.get(event.payload.conversation_id);
       if (!ids) { ids = new Set(); pending.set(event.payload.conversation_id, ids); }

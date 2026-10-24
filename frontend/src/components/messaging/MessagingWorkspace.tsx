@@ -18,9 +18,12 @@ import {
   matchesConversation,
 } from "@/lib/messaging/model";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useAuthStore } from "@/stores/authStore";
 import { useRealtimeStore } from "@/stores/realtimeStore";
 import { ChatPanel } from "./ChatPanel";
+import { MutualContacts } from "./MutualContacts";
+import { FollowerContacts } from "./FollowerContacts";
 import {
   MessagingAvatar,
   MessagingEmpty,
@@ -105,6 +108,8 @@ function MessagingSession({
 }) {
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const router = useRouter();
+  const start = useStartConversation();
   const list = useConversations(viewer);
   const connected = useRealtimeStore(
     (state) => state.userId === viewer && state.connected,
@@ -160,6 +165,7 @@ function MessagingSession({
               <Search className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden />
               <input
                 aria-label="Tìm cuộc trò chuyện"
+                maxLength={100}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Tìm bạn đồng hành…"
@@ -179,6 +185,7 @@ function MessagingSession({
             </div>
           )}
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+            <h2 className="px-3 pb-2 pt-3 text-xs font-semibold text-ink-muted">Cuộc trò chuyện</h2>
             {list.isPending ? (
               <div
                 role="status"
@@ -203,12 +210,10 @@ function MessagingSession({
                 Kiểm tra kết nối rồi thử lại nhé.
               </MessagingEmpty>
             ) : !conversations.length ? (
-              <MessagingEmpty
-                title="Hành trình bắt đầu từ một lời chào"
-                action={newButton}
-              >
-                Gửi tin cho bạn đồng hành để cùng chia sẻ những điểm đến mới.
-              </MessagingEmpty>
+              <div className="px-3 py-5 text-sm text-ink-muted">
+                <p className="font-semibold text-ink">Hành trình bắt đầu từ một lời chào</p>
+                <p className="mt-2">Chọn một người bạn bên dưới để bắt đầu.</p>
+              </div>
             ) : !filtered.length ? (
               <p
                 role="status"
@@ -311,6 +316,16 @@ function MessagingSession({
                   : "Tải thêm cuộc trò chuyện"}
               </button>
             )}
+            <MutualContacts viewer={viewer} search={search} disabled={start.isPending}
+              onSelect={(contact) => {
+                const version = getAuthSessionVersion();
+                const current = () => useAuthStore.getState().user?.id === viewer && getAuthSessionVersion() === version;
+                start.mutate(contact.id, {
+                  onSuccess: ({ conversation }) => { if (current()) router.push(ROUTES.conversation(conversation.id)); },
+                  onError: (error) => { if (current()) toast.error(error.message || "Chưa thể mở cuộc trò chuyện."); },
+                });
+              }} />
+            <FollowerContacts viewer={viewer} search={search} />
           </div>
         </aside>
         <section
@@ -390,13 +405,12 @@ function NewConversationDialog({
     >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-surface p-6 text-ink shadow-xl">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-border bg-surface p-6 text-ink shadow-xl">
           <Dialog.Title className="pr-8 text-lg font-bold">
             Cuộc trò chuyện mới
           </Dialog.Title>
           <Dialog.Description className="mt-2 text-sm leading-6 text-ink-muted">
-            Tìm bằng tên người dùng của bạn đồng hành, hoặc nhấn “Nhắn tin” trên
-            hồ sơ của họ.
+            Chọn bạn bè bên dưới, hoặc tìm bằng tên người dùng.
           </Dialog.Description>
           <Dialog.Close
             aria-label="Đóng"
@@ -466,6 +480,8 @@ function NewConversationDialog({
               </div>
               {profile.data.id === viewer ? (
                 <span className="text-xs text-ink-muted">Bạn</span>
+              ) : !profile.data.can_message ? (
+                <span className="max-w-32 text-xs text-ink-muted">{profile.data.is_mutual ? "Hiện không thể nhắn tin" : "Cần theo dõi nhau để nhắn tin"}</span>
               ) : (
                 <button
                   type="button"
@@ -501,6 +517,14 @@ function NewConversationDialog({
                 "Hiện không thể bắt đầu cuộc trò chuyện này."}
             </p>
           )}
+          {open && <MutualContacts viewer={viewer} disabled={start.isPending} onSelect={(contact) => {
+            const version = getAuthSessionVersion();
+            start.mutate(contact.id, { onSuccess: ({ conversation }) => {
+              if (useAuthStore.getState().user?.id !== viewer || version !== getAuthSessionVersion()) return;
+              onOpenChange(false);
+              router.push(ROUTES.conversation(conversation.id));
+            } });
+          }} />}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

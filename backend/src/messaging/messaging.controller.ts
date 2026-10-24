@@ -7,6 +7,7 @@ import { ConversationQueryDto, CreateMessageDto, DirectConversationDto, MessageQ
 import { MessagingService } from './messaging.service';
 import { MessagingPolicyService } from './messaging-policy.service';
 import { MessagingRateLimitGuard } from './messaging-rate-limit.guard';
+import { ContactsQueryDto } from './dto/contacts-query.dto';
 
 @ApiTags('Messaging')
 @ApiBearerAuth()
@@ -24,6 +25,12 @@ export class MessagingController {
   @Get('unread-count') @Header('Cache-Control', 'private, no-store')
   @ApiOperation({ summary: 'Authoritative unread message and conversation counts' })
   unread(@CurrentUser() user: AuthenticatedUser) { return this.messaging.unreadCount(user.sub.toLowerCase()); }
+
+  @Get('contacts') @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({ summary: 'List my friends or incoming followers awaiting follow-back, including users without a conversation' })
+  contacts(@CurrentUser() user: AuthenticatedUser, @Query() query: ContactsQueryDto) {
+    return this.messaging.contacts(user.sub.toLowerCase(), query);
+  }
 
   @Post('direct') @Header('Cache-Control', 'private, no-store')
   @ApiOperation({ summary: 'Start or retrieve a direct conversation with an active recipient' })

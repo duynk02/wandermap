@@ -14,6 +14,7 @@ import { ApiExceptionFilter } from '../src/common/filters/api-exception.filter';
 import { DatabaseModule } from '../src/database/database.module';
 import { DatabaseService } from '../src/database/database.service';
 import { MessagingModule } from '../src/messaging/messaging.module';
+import { UsersModule } from '../src/users/users.module';
 import { MessagingEventPublisher } from '../src/messaging/messaging-events.publisher';
 import type { MessagingEvent } from '../src/messaging/messaging-events';
 import { RealtimeGateway } from '../src/realtime/realtime.gateway';
@@ -53,7 +54,7 @@ describeDatabase('Messaging: committed REST writes, Socket.IO /realtime and mult
     const module = await Test.createTestingModule({ imports: [
       ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true, skipProcessEnv: true,
         load: [() => ({ JWT_ACCESS_SECRET: secret, CORS_ORIGINS: origin })] }),
-      ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]), DatabaseModule, MessagingModule,
+      ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]), DatabaseModule, MessagingModule, UsersModule,
     ] }).overrideProvider(DatabaseService).useValue({
       query: (sql: string, values: unknown[]) => pool.query(sql, values),
       transaction: async <T>(work: (client: PoolClient) => Promise<T>) => {
@@ -106,6 +107,7 @@ describeDatabase('Messaging: committed REST writes, Socket.IO /realtime and mult
       await pool.query('INSERT INTO users (id, email) VALUES ($1, $2)', [user, `${user}@example.test`]);
       await pool.query('INSERT INTO profiles (id, username, display_name) VALUES ($1, $2, $2)', [user, `socket_${user.replaceAll('-', '').slice(0, 20)}`]);
     }
+    await pool.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $2), ($2, $1)', [sender, recipient]);
     const location = (await pool.query<{ id: string }>("INSERT INTO locations (name, coordinates) VALUES ('Đà Lạt', ST_SetSRID(ST_MakePoint(108, 12), 4326)) RETURNING id")).rows[0].id;
     await pool.query(`INSERT INTO posts (id, author_id, location_id, content, images, rating, visited_at)
       VALUES ($1, $2, $3, 'Private-preview test caption', ARRAY['https://example.test/private.webp'], 5, '2026-10-23')`, [post, sender, location]);
@@ -219,6 +221,26 @@ describeDatabase('Messaging: committed REST writes, Socket.IO /realtime and mult
     await read(id, '1').expect(400);
     await barrier();
     expect(changes(tabs[2])).toEqual([]);
+  });
+
+  it('updates sending permission across all participant tabs after unfollow/follow-back, without deleting history', async () => {
+    const { id, tabs } = await setupChat();
+    await send(id).expect(201);
+    await clear();
+    const username = `socket_${recipient.replaceAll('-', '').slice(0, 20)}`;
+    for (const following of [false, true]) {
+      await request(app.getHttpServer())[following ? 'post' : 'delete'](`/api/v1/users/${username}/follow`)
+        .set('Authorization', auth()).expect(following ? 201 : 200);
+      await barrier();
+      for (const socket of tabs.slice(0, 4)) {
+        expect(changes(socket, 'conversation:updated').at(-1)?.payload).toMatchObject({ conversation_id: id, reason: 'policy' });
+      }
+      expect(changes(tabs[4])).toEqual([]);
+      const result = await request(app.getHttpServer()).get(`${base}/${id}`).set('Authorization', auth(recipient)).expect(200);
+      expect(result.body).toMatchObject({ can_send: following, is_mutual: following });
+      expect((await history(id).expect(200)).body.data).toHaveLength(1);
+      await clear();
+    }
   });
 
   it('publishes once across concurrent REST retries and publishes no duplicate/conflict/stale-read events', async () => {

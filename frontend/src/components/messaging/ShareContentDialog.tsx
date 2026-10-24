@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
 import { MessagingAvatar, messagingButtonClass } from "./MessagingPrimitives";
 import { SharedContentCard } from "./SharedContentCard";
+import { MutualContacts } from "./MutualContacts";
 
 export function ShareContentDialog({
   target,
@@ -198,7 +199,7 @@ export function ShareContentDialog({
                 {lookup && profile.data && profile.data.id !== viewer && (
                   <button
                     type="button"
-                    disabled={blocked}
+                    disabled={blocked || !profile.data.can_message || profile.isFetching}
                     aria-pressed={
                       destination?.kind === "user" &&
                       destination.id === profile.data.id
@@ -225,7 +226,7 @@ export function ShareContentDialog({
                         {profile.data.display_name}
                       </span>
                       <span className="block truncate text-xs text-ink-muted">
-                        @{profile.data.username}
+                        {profile.data.can_message ? `@${profile.data.username}` : "Chỉ có thể nhắn tin khi hai bạn là bạn bè và không chặn nhau."}
                       </span>
                     </span>
                     {destination?.kind === "user" &&
@@ -260,8 +261,7 @@ export function ShareContentDialog({
                     </p>
                   ) : !conversations.length ? (
                     <p className="py-2 text-sm text-ink-muted">
-                      Chưa có cuộc trò chuyện phù hợp. Bạn có thể tìm người nhận
-                      bằng username.
+                      Chưa có cuộc trò chuyện phù hợp. Chọn một người trong danh sách Bạn bè bên dưới.
                     </p>
                   ) : (
                     <div className="max-h-44 space-y-1 overflow-y-auto">
@@ -328,6 +328,13 @@ export function ShareContentDialog({
                     </button>
                   )}
                 </section>
+                <MutualContacts viewer={viewer} search={search} exclude={conversations.map((row) => row.recipient.id)} disabled={blocked}
+                  description="Chọn một người để chia sẻ nội dung."
+                  selectedId={destination?.kind === "user" ? destination.id : undefined}
+                  onSelect={(contact) => {
+                    setDestination({ kind: "user", id: contact.id, name: contact.display_name });
+                    setError(null);
+                  }} />
                 <label
                   className="block text-sm font-medium"
                   htmlFor="share-caption"

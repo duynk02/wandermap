@@ -21,10 +21,10 @@ const owner = "11111111-1111-4111-8111-111111111111", recipientId = "22222222-22
 const postId = "33333333-3333-4333-8333-333333333333", locationId = "44444444-4444-4444-8444-444444444444", journeyId = "55555555-5555-4555-8555-555555555555";
 const chatId = "66666666-6666-4666-8666-666666666666", blockedId = "77777777-7777-4777-8777-777777777777";
 const user = { id: owner, username: "share_test", display_name: "Người khám phá", avatar_url: null, email: "fixture@example.test", bio: null, home_city: null, country_count: 0, total_posts: 1, followers_count: 0, following_count: 0, created_at: "2026-01-01T00:00:00Z" };
-const recipient = { id: recipientId, username: "ban_dong_hanh", display_name: "Bạn đồng hành", avatar_url: null, is_active: true };
+const recipient = { id: recipientId, username: "ban_dong_hanh", display_name: "Bạn đồng hành", avatar_url: null, is_active: true, is_following: true, follows_you: true, is_mutual: true, can_message: true };
 const now = () => new Date().toISOString();
 const token = `fixture.${Buffer.from(JSON.stringify({ sub: owner, exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64url")}.fixture`;
-let web, imageUrl, sendMode = "hold", heldSend = null, hidden = false, historyGate = false;
+let web, activePath = "/", imageUrl, sendMode = "hold", heldSend = null, hidden = false, historyGate = false;
 let heldHistory = [], socket, chrome, nextServer, nextLogs = "";
 const exceptions = [], mutations = [], requests = [], checks = [], messages = [];
 const location = { id: locationId, name: "Hồ Tuyền Lâm", address: "Đà Lạt, Lâm Đồng", city: "Đà Lạt", country: "Việt Nam", category: "mountain", coordinates: { lat: 11.896, lng: 108.433 }, post_count: 1, avg_rating: 5, trending_score: 0, created_at: now() };
@@ -32,6 +32,12 @@ const post = { id: postId, post_type: "location", author_id: owner, author: user
 const journey = { id: journeyId, user_id: owner, title: "Cung đường Đà Lạt", description: "Hai điểm đến bình yên", cover_image_url: null, visibility: "public", status: "published", revision: 1, author: user, created_at: now(), updated_at: now(), style_config: { version: 1, line_color: "#22c55e", line_style: "solid", show_labels: true, show_order: true, map_style: "outdoors-v12" }, stops: [] };
 const chat = { id: chatId, type: "direct", created_at: now(), updated_at: now(), last_message_at: null, recipient, can_send: true, blocked_by_me: false, read_state: { last_read_sequence: null, last_read_at: null }, recipient_read_state: { last_read_sequence: null, last_read_at: null }, unread_count: 0, last_message: null };
 const blocked = { ...chat, id: blockedId, recipient: { ...recipient, id: randomUUID(), username: "inactive", display_name: "Người nhận không khả dụng", is_active: false }, can_send: false };
+const contactId = "88888888-8888-4888-8888-888888888888";
+const contact = { ...recipient, id: contactId, username: "ban_moi", display_name: "Bạn chưa từng chat", conversation_id: null };
+let followingBack = false, relationshipTests = false;
+const follower = { ...contact, id: "99999999-9999-4999-8999-999999999999", username: "minh_hai", display_name: "Minh Hải" };
+let followerFollowedBack = false, followBackMode = "success";
+const relation = () => ({ ...contact, is_following: followingBack, follows_you: true, is_mutual: followingBack, can_message: followingBack });
 const unavailable = () => ({ available: false, id: null, title: null, image_url: null, author: null, location: null, address: null, category: null });
 function project(row) {
   const base = { available: true, id: row.shared_resource_id, title: null, image_url: null, author: null, location: null, address: null, category: null };
@@ -49,9 +55,19 @@ function commit(input) {
   messages.push(row); chat.last_message_at = row.created_at; chat.last_message = project(row);
   return { message: project(row), created: true };
 }
-function responseFor(path) {
+function responseFor(path, query = new URLSearchParams()) {
   if (path.endsWith("/auth/refresh")) return { accessToken: token, expiresIn: 3600 };
   if (path.endsWith("/users/me")) return user;
+  if (path.endsWith(`/users/${user.username}`)) return user;
+  if (path.endsWith(`/users/${user.username}/followers`)) return { data: [recipient, relation()], count: 2, page: 1, pageSize: 20, hasMore: false };
+  if (path.endsWith(`/users/${user.username}/following`)) return { data: [recipient, ...(followingBack ? [relation()] : [])], count: followingBack ? 2 : 1, page: 1, pageSize: 20, hasMore: false };
+  if (path.endsWith("/conversations/contacts")) {
+    const data = !relationshipTests ? [] : query.get("kind") === "followers"
+      ? (followerFollowedBack ? [] : [follower])
+      : [{ ...recipient, conversation_id: chatId }, ...(followingBack ? [contact] : []), ...(followerFollowedBack ? [follower] : [])];
+    const term = query.get("search")?.trim().toLowerCase() ?? "";
+    return { data: data.filter((row) => `${row.username} ${row.display_name}`.toLowerCase().includes(term)), hasMore: false, next_page: null };
+  }
   if (path.endsWith(`/users/${recipient.username}`)) return { ...user, ...recipient };
   if (path.endsWith("/notifications/unread-count")) return { count: 0 };
   if (path.endsWith("/conversations/unread-count")) return { unread_messages: 0, unread_conversations: 0 };
@@ -101,7 +117,12 @@ try {
   };
   async function intercept({ requestId, request }) {
     const url = new URL(request.url), path = url.pathname, method = request.method, input = request.postData ? JSON.parse(request.postData) : null;
-    requests.push({ path, method });
+    requests.push({ path, method, query: url.search });
+    if (path.endsWith(`/users/${contact.username}/follow`) && method === "POST") { followingBack = true; await fulfill(requestId, { following: true, changed: true }, 201); return; }
+    if (path.endsWith(`/users/${follower.username}/follow`) && method === "POST") {
+      if (followBackMode === "error") { await fulfill(requestId, { message: "Chưa thể theo dõi lại. Vui lòng thử lại." }, 503); return; }
+      followerFollowedBack = true; await fulfill(requestId, { following: true, changed: true }, 201); return;
+    }
     if (path.endsWith(`/conversations/${chatId}/messages`) && method === "POST") {
       mutations.push({ path, method, input });
       assert.deepEqual(Object.keys(input).sort(), ["client_message_id", "content", "message_type", "shared_resource_id"]);
@@ -114,17 +135,19 @@ try {
     if (path.endsWith(`/conversations/${chatId}/read`) && method === "PATCH") { mutations.push({ path, method, input }); chat.read_state = { last_read_sequence: input.last_read_sequence, last_read_at: now() }; await fulfill(requestId, { conversation_id: chatId, ...chat.read_state, unread_count: 0 }); return; }
     if (path.endsWith(`/conversations/${chatId}/messages`) && method === "GET" && historyGate) { heldHistory.push(requestId); return; }
     if (!["GET", "POST"].includes(method) || (method === "POST" && !path.endsWith("/auth/refresh"))) throw new Error(`Unexpected fixture mutation ${method} ${path}`);
-    const result = responseFor(path); await fulfill(requestId, result ?? { message: "Không tìm thấy" }, result ? 200 : 404);
+    const result = responseFor(path, url.searchParams); await fulfill(requestId, result ?? { message: "Không tìm thấy" }, result ? 200 : 404);
   }
   socket.addEventListener("message", ({ data }) => {
     const response = JSON.parse(data);
-    if (response.method === "Runtime.exceptionThrown") exceptions.push(response.params.exceptionDetails.exception?.description ?? response.params.exceptionDetails.text);
+    if (response.method === "Page.frameNavigated" && !response.params.frame.parentId) activePath = new URL(response.params.frame.url).pathname;
+    if (response.method === "Page.navigatedWithinDocument") activePath = new URL(response.params.url).pathname;
+    if (response.method === "Runtime.exceptionThrown") exceptions.push(`${activePath}: ${response.params.exceptionDetails.exception?.description ?? response.params.exceptionDetails.text}`);
     if (response.method === "Fetch.requestPaused") void intercept(response.params).catch((error) => { if (!error.message.includes("Invalid InterceptionId")) exceptions.push(error.stack); });
     const entry = pending.get(response.id); if (entry) { pending.delete(response.id); clearTimeout(entry.timer); response.error ? entry.reject(new Error(response.error.message)) : entry.done(response.result); }
   });
   evaluate = async (expression) => { const result = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }); if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text); return result.result.value; };
   capture = async (name) => { const shot = await send("Page.captureScreenshot", { format: "png" }); await writeFile(join(artifacts, name), Buffer.from(shot.data, "base64")); };
-  const navigate = async (path) => { await send("Page.navigate", { url: web + path }); await send("Page.bringToFront"); };
+  const navigate = async (path) => { activePath = path; await send("Page.navigate", { url: web + path }); await send("Page.bringToFront"); };
   const visible = (selector) => evaluate(`!!document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect().width`);
   const click = (text, scope = "document") => evaluate(`(()=>{const e=Array.from(${scope}.querySelectorAll('button,a')).find(e=>e.getBoundingClientRect().width>0&&e.textContent.trim()===${JSON.stringify(text)});if(!e)throw new Error('Missing action: '+${JSON.stringify(text)});e.click();})()`);
   const dialog = "document.querySelector('[data-testid=share-content-dialog]')";
@@ -216,6 +239,61 @@ try {
   assert.ok(await evaluate(`${dialog}.getBoundingClientRect().width<=innerWidth&&${dialog}.getBoundingClientRect().height<=innerHeight`));
   await capture("mobile-share-dialog.png"); await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: "dark" }] });
   await capture("mobile-share-dark.png"); checks.push("Share Dialog remains usable at 320px and in dark theme with footer outside the scrolling body");
+  await evaluate(`${dialog}.querySelector('button[aria-label="Đóng chia sẻ"]').click()`);
+
+  relationshipTests = true;
+  await navigate(`/profile/${user.username}`);
+  await until(() => evaluate("Array.from(document.querySelectorAll('button')).some(e=>e.textContent.includes('Chỉnh sửa hồ sơ'))"), "profile session restored");
+  await until(() => evaluate("Array.from(document.querySelectorAll('button')).some(e=>e.textContent.includes('người theo dõi'))"), "profile follow counters");
+  await evaluate("Array.from(document.querySelectorAll('button')).find(e=>e.textContent.includes('người theo dõi')).click()");
+  await until(() => evaluate("document.querySelector('[role=dialog]')?.textContent.includes('Theo dõi lại')"), "followers list follow-back action");
+  assert.equal(await visible('button[aria-label="Nhắn tin cho Bạn đồng hành"]'), true);
+  assert.equal(await visible('button[aria-label="Nhắn tin cho Bạn chưa từng chat"]'), false);
+  await click("Theo dõi lại", "document.querySelector('[role=dialog]')");
+  await until(() => visible('button[aria-label="Nhắn tin cho Bạn chưa từng chat"]'), "message action after follow back");
+  await capture("mobile-profile-followers.png");
+  await evaluate("document.querySelector('button[aria-label=\"Nhắn tin cho Bạn chưa từng chat\"]').click()");
+  await until(() => evaluate(`location.pathname==='/messages/${chatId}'`), "follower messaging navigation");
+  checks.push("profile followers distinguish mutuals from follow-back; following back enables REST messaging and navigation");
+  await navigate(`/profile/${user.username}`);
+  await until(() => evaluate("Array.from(document.querySelectorAll('button')).some(e=>e.textContent.includes('Chỉnh sửa hồ sơ'))"), "following profile session restored");
+  await until(() => evaluate("Array.from(document.querySelectorAll('button')).some(e=>e.textContent.includes('đang theo dõi'))"), "following counter");
+  await evaluate("Array.from(document.querySelectorAll('button')).find(e=>e.textContent.includes('đang theo dõi')).click()");
+  await until(() => visible('button[aria-label="Nhắn tin cho Bạn đồng hành"]'), "following list messaging action");
+  await evaluate("document.querySelector('button[aria-label=\"Đóng danh sách\"]').click()");
+  checks.push("profile following counter opens the actual list with message actions");
+  const directBefore = mutations.filter((row) => row.path.endsWith('/direct')).length;
+  await navigate("/messages");
+  await until(() => evaluate("document.querySelector('section[aria-label=\"Bạn bè\"]')?.textContent.includes('Bạn chưa từng chat')"), "friend without messages");
+  assert.equal(mutations.filter((row) => row.path.endsWith('/direct')).length, directBefore);
+  assert.ok(await evaluate("document.querySelector('section[aria-label=\"Bạn bè\"]').textContent.includes('Bạn đồng hành')"), "friends also include contacts with an existing conversation");
+  assert.equal(await evaluate("document.body.textContent.includes('Bạn theo dõi qua lại')"), false);
+  await capture("mobile-mutual-contacts.png");
+  const followerSection = "document.querySelector('section[aria-label=\"Người theo dõi bạn\"]')";
+  await until(() => visible('button[aria-label="Theo dõi lại Minh Hải"]:not(:disabled)'), "incoming follower action");
+  assert.equal(await evaluate("document.querySelector('section[aria-label=\"Bạn bè\"]').textContent.includes('Minh Hải')"), false);
+  await capture("mobile-friends-and-followers.png");
+  await evaluate(`${followerSection}.querySelector('button[aria-expanded]').click()`);
+  assert.equal(await evaluate(`${followerSection}.querySelector('button[aria-expanded]').getAttribute('aria-expanded')`), "false");
+  assert.equal(await visible('button[aria-label="Theo dõi lại Minh Hải"]'), false);
+  await capture("mobile-followers-collapsed.png");
+  await evaluate(`${followerSection}.querySelector('button[aria-expanded]').click()`);
+  await until(() => visible('button[aria-label="Theo dõi lại Minh Hải"]:not(:disabled)'), "expanded followers");
+  followBackMode = "error";
+  await evaluate("document.querySelector('button[aria-label=\"Theo dõi lại Minh Hải\"]').click()");
+  await until(() => evaluate(`${followerSection}.querySelector('[role=alert]')?.textContent.includes('Chưa thể theo dõi lại')`), "follow-back failure");
+  assert.equal(await evaluate("document.querySelector('section[aria-label=\"Bạn bè\"]').textContent.includes('Minh Hải')"), false);
+  followBackMode = "success";
+  await evaluate("document.querySelector('button[aria-label=\"Theo dõi lại Minh Hải\"]').click()");
+  await until(() => evaluate("document.querySelector('section[aria-label=\"Bạn bè\"]').textContent.includes('Minh Hải')"), "followed contact promoted to friends");
+  assert.equal(await visible('button[aria-label="Theo dõi lại Minh Hải"]'), false);
+  assert.equal(mutations.filter((row) => row.path.endsWith('/direct')).length, directBefore);
+  assert.ok(await evaluate("document.documentElement.scrollWidth<=innerWidth"));
+  checks.push("friends include all mutuals; incoming followers can collapse/expand and failed follow-back stays retryable before successful promotion without creating a conversation");
+  await evaluate("Array.from(document.querySelector('section[aria-label=\"Bạn bè\"]').querySelectorAll('button')).find(e=>e.textContent.includes('Bạn chưa từng chat')).click()");
+  await until(() => evaluate(`location.pathname==='/messages/${chatId}'`), "new contact opens chat");
+  assert.ok(mutations.some((row) => row.path.endsWith('/direct') && row.input.recipient_id === contactId));
+  checks.push("messaging lists mutual contacts with no history, creates no empty chats on load, and opens one through REST on selection");
   assert.deepEqual(exceptions, []);
   console.log(JSON.stringify({ checks, messageCount: messages.length, mutations, artifacts, exceptions }, null, 2));
 } catch (error) {

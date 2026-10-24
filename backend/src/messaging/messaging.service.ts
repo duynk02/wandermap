@@ -7,6 +7,8 @@ import { ConversationQueryDto, CreateMessageDto, MessageQueryDto, ReadConversati
 import { CONVERSATION_SELECT, MESSAGE_JSON } from './message-projection';
 import { MessagingPolicyService } from './messaging-policy.service';
 import { MessagingEventPublisher } from './messaging-events.publisher';
+import { messagingAllowed, messagingUnblocked } from './messaging-access';
+import { ContactsQueryDto } from './dto/contacts-query.dto';
 import type { ConversationDto, CursorPage, MessageDto, MessagingUnreadCount, ReadConversationResult, SendMessageResult } from './messaging.types';
 
 interface MemberConversation { id: string; recipient_id: string; last_read_sequence: string | null; }
@@ -35,6 +37,25 @@ function decodeCursor(value?: string): [string, string] | null {
 @Injectable()
 export class MessagingService {
   constructor(private readonly db: DatabaseService, private readonly policy: MessagingPolicyService, private readonly events: MessagingEventPublisher) {}
+
+  async contacts(viewer: string, query: ContactsQueryDto) {
+    const relationship = query.kind === 'followers'
+      ? `EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = p.id AND f.following_id = $1)
+        AND NOT EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = p.id)
+        AND ${messagingUnblocked('$1', 'p.id')}`
+      : messagingAllowed('$1', 'p.id');
+    const rows = (await this.db.query<{ id: string; username: string; display_name: string; avatar_url: string | null; conversation_id: string | null }>(`
+      SELECT p.id, p.username, p.display_name, p.avatar_url, c.id AS conversation_id
+      FROM profiles p JOIN users u ON u.id = p.id AND u.is_active = true
+      LEFT JOIN conversations c ON c.direct_user_low_id = LEAST($1::uuid, p.id)
+        AND c.direct_user_high_id = GREATEST($1::uuid, p.id)
+      WHERE p.id <> $1 AND ${relationship}
+        AND strpos(unaccent(lower(p.display_name || ' ' || p.username)), unaccent(lower($4::text))) > 0
+      ORDER BY p.username, p.id LIMIT $2 OFFSET $3`,
+    [viewer, query.pageSize + 1, (query.page - 1) * query.pageSize, query.search?.trim() ?? ''])).rows;
+    const hasMore = rows.length > query.pageSize;
+    return { data: rows.slice(0, query.pageSize), hasMore, next_page: hasMore ? query.page + 1 : null };
+  }
 
   async list(viewer: string, query: ConversationQueryDto): Promise<CursorPage<ConversationDto>> {
     const cursor = decodeCursor(query.cursor);

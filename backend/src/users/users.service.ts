@@ -2,10 +2,14 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { DatabaseService } from '../database/database.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { VisitedLocationsService } from '../visited-locations/visited-locations.service';
+import { MessagingPolicyService } from '../messaging/messaging-policy.service';
+import { MessagingEventPublisher } from '../messaging/messaging-events.publisher';
+import { relationshipFields } from '../messaging/messaging-access';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly db: DatabaseService, private readonly visited: VisitedLocationsService) {}
+  constructor(private readonly db: DatabaseService, private readonly visited: VisitedLocationsService,
+    private readonly messagingPolicy: MessagingPolicyService, private readonly messagingEvents: MessagingEventPublisher) {}
 
   async getById(userId: string) {
     const result = await this.db.query(
@@ -27,7 +31,7 @@ export class UsersService {
                 JOIN locations l ON l.id = v.location_id WHERE v.user_id = p.id
                 AND (v.visibility = 'public' OR v.user_id = $2::uuid)) AS country_count,
               p.followers_count, p.following_count, p.created_at,
-              ($2::uuid IS NOT NULL AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $2 AND f.following_id = p.id)) AS is_following
+              ${relationshipFields('$2::uuid', 'p.id')}
        FROM profiles p JOIN users u ON u.id = p.id AND u.is_active = true WHERE lower(p.username) = lower($1)`, [username, viewerId ?? null],
     );
     if (!result.rows[0]) throw new NotFoundException('Profile not found.');
@@ -60,21 +64,31 @@ export class UsersService {
   }
 
   async follow(userId: string, username: string) {
-    const target = await this.findIdByUsername(username);
-    if (target.id === userId) throw new BadRequestException('You cannot follow yourself.');
-    const result = await this.db.query(
-      'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING follower_id', [userId, target.id],
-    );
-    return { following: true, changed: (result.rowCount ?? 0) > 0 };
+    return this.setFollowing(userId, username, true);
   }
 
   async unfollow(userId: string, username: string) {
-    const target = await this.findIdByUsername(username);
-    const result = await this.db.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [userId, target.id]);
-    return { following: false, changed: (result.rowCount ?? 0) > 0 };
+    return this.setFollowing(userId, username, false);
   }
 
-  async listRelations(username: string, relation: 'followers' | 'following', page = 1, pageSize = 20) {
+  private async setFollowing(userId: string, username: string, following: boolean) {
+    const target = await this.findIdByUsername(username);
+    if (target.id === userId) throw new BadRequestException('You cannot follow yourself.');
+    const changed = await this.db.transaction(async (client) => {
+      // Serialize unfollow with send/direct so the permission cannot change mid-send.
+      await this.messagingPolicy.lockPair(client, userId, target.id);
+      const active = await this.messagingPolicy.lockAccounts(client, userId, target.id);
+      if (following && !active) throw new NotFoundException('Profile not found.');
+      const result = following
+        ? await client.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [userId, target.id])
+        : await client.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [userId, target.id]);
+      return !!result.rowCount;
+    });
+    if (changed) await this.messagingEvents.policy(userId, target.id);
+    return { following, changed };
+  }
+
+  async listRelations(username: string, relation: 'followers' | 'following', page = 1, pageSize = 20, viewerId?: string) {
     const target = await this.findIdByUsername(username);
     const safePage = Math.max(1, page);
     const safeSize = Math.min(Math.max(1, pageSize), 50);
@@ -83,11 +97,14 @@ export class UsersService {
     const joinColumn = relation === 'followers' ? 'f.follower_id' : 'f.following_id';
     const [items, count] = await Promise.all([
       this.db.query(
-        `SELECT p.id, p.username, p.display_name, p.avatar_url, p.bio, p.followers_count
+        `SELECT p.id, p.username, p.display_name, p.avatar_url, p.bio, p.followers_count,
+           ${relationshipFields('$4::uuid', 'p.id')}
          FROM follows f JOIN profiles p ON p.id = ${joinColumn}
-         WHERE ${where} ORDER BY f.created_at DESC LIMIT $2 OFFSET $3`, [target.id, safeSize, offset],
+         JOIN users u ON u.id = p.id AND u.is_active = true
+         WHERE ${where} ORDER BY f.created_at DESC, p.id DESC LIMIT $2 OFFSET $3`, [target.id, safeSize, offset, viewerId ?? null],
       ),
-      this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM follows f WHERE ${where}`, [target.id]),
+      this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM follows f
+        JOIN users u ON u.id = ${joinColumn} AND u.is_active = true WHERE ${where}`, [target.id]),
     ]);
     const total = Number(count.rows[0]?.count ?? 0);
     return { data: items.rows, count: total, page: safePage, pageSize: safeSize, hasMore: offset + items.rows.length < total };

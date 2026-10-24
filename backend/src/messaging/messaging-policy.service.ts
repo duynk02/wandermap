@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException,
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
 import { MessagingEventPublisher } from './messaging-events.publisher';
+import { mutualFollow } from './messaging-access';
 
 @Injectable()
 export class MessagingPolicyService {
@@ -26,6 +27,8 @@ export class MessagingPolicyService {
     const blocked = await client.query(`SELECT 1 FROM messaging_blocks
       WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1`, [viewer, recipient]);
     if (blocked.rowCount) throw new ForbiddenException({ code: 'MESSAGING_NOT_ALLOWED', message: 'Hiện không thể gửi tin nhắn trong cuộc trò chuyện này.' });
+    const mutual = await client.query(`SELECT 1 WHERE ${mutualFollow('$1::uuid', '$2::uuid')}`, [viewer, recipient]);
+    if (!mutual.rowCount) throw new ForbiddenException({ code: 'MUTUAL_FOLLOW_REQUIRED', message: 'Hai bạn cần theo dõi nhau để nhắn tin.' });
   }
 
   async setBlock(viewer: string, target: string, blocked: boolean): Promise<{ user_id: string; blocked: boolean }> {

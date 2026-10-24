@@ -45,6 +45,7 @@ export interface ConversationDto {
   last_message_at: string | null;
   recipient: MessagingProfile & { is_active: boolean };
   can_send: boolean;
+  is_mutual: boolean;
   blocked_by_me: boolean;
   read_state: ConversationReadState;
   recipient_read_state: ConversationReadState;

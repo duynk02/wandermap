@@ -50,6 +50,7 @@ export function useStartConversation() {
       if (current()) {
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messaging.unreadCount(owner) });
       }
+      if (current()) void queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.messaging.viewer(owner), "contacts"] });
     },
   });
 }

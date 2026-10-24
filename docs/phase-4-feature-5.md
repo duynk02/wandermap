@@ -37,6 +37,9 @@ Người nhận mới được resolve bằng `POST /conversations/direct`, dự
 khi gửi. Account/block/membership/resource policy cuối cùng được backend thực thi
 trong cùng transaction tạo message.
 
+Điều kiện gửi mới hiện bao gồm theo dõi qua lại. Dialog cũng có mutual contacts
+chưa từng chat; xem [cập nhật chính sách và danh sách theo dõi](phase-4-mutual-follow.md).
+
 `useShareContent.ts` giữ payload/key cho failed hoặc pending attempt trong
 `messageDraftStore`, chỉ ở bộ nhớ và trong cùng auth session. Retry sau mất response
 giữ nguyên UUID, resource và caption; chọn lại cùng người bằng recent chat hoặc
