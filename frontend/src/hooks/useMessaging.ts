@@ -19,6 +19,7 @@ import {
 } from "@/lib/api/messaging";
 import { reconcileMessageCache } from "@/lib/realtime/messaging";
 import { validateMessageText, type LocalMessage } from "@/lib/messaging/model";
+import { readMessagingSession } from "@/lib/messaging/session";
 import { useAuthStore } from "@/stores/authStore";
 import { useRealtimeStore } from "@/stores/realtimeStore";
 import {
@@ -50,10 +51,10 @@ export function useConversations(viewer: string) {
   const interval = usePolling(viewer);
   return useInfiniteQuery({
     queryKey: QUERY_KEYS.messaging.conversations(viewer),
-    queryFn: ({ pageParam, signal }) => {
-      assertViewer(viewer);
-      return getConversations({ limit: 20, cursor: pageParam }, signal);
-    },
+    queryFn: ({ pageParam, signal }) =>
+      readMessagingSession(viewer, () =>
+        getConversations({ limit: 20, cursor: pageParam }, signal),
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) =>
       page.hasMore ? (page.next_cursor ?? undefined) : undefined,
@@ -67,10 +68,8 @@ export function useConversation(viewer: string, id: string) {
   const interval = usePolling(viewer);
   return useQuery({
     queryKey: QUERY_KEYS.messaging.conversation(viewer, id),
-    queryFn: ({ signal }) => {
-      assertViewer(viewer);
-      return getConversation(id, signal);
-    },
+    queryFn: ({ signal }) =>
+      readMessagingSession(viewer, () => getConversation(id, signal)),
     staleTime: 15_000,
     retry,
     refetchInterval: interval,
@@ -85,14 +84,14 @@ export function useConversationMessages(
   const interval = usePolling(viewer);
   return useInfiniteQuery({
     queryKey: QUERY_KEYS.messaging.messages(viewer, id),
-    queryFn: ({ pageParam, signal }) => {
-      assertViewer(viewer);
-      return getConversationMessages(
-        id,
-        { limit: 30, before_sequence: pageParam },
-        signal,
-      );
-    },
+    queryFn: ({ pageParam, signal }) =>
+      readMessagingSession(viewer, () =>
+        getConversationMessages(
+          id,
+          { limit: 30, before_sequence: pageParam },
+          signal,
+        ),
+      ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) =>
       page.hasMore ? (page.next_cursor ?? undefined) : undefined,
@@ -116,7 +115,17 @@ export function useReadConversation(viewer: string, id: string) {
       return { result, version };
     },
     retry: false,
-    onSuccess: ({ result, version }) => {
+    onSuccess: async ({ result, version }) => {
+      if (
+        useAuthStore.getState().user?.id !== viewer ||
+        version !== getAuthSessionVersion()
+      )
+        return;
+      // A detail snapshot started before PATCH cannot roll the read cursor backwards.
+      await client.cancelQueries({
+        queryKey: QUERY_KEYS.messaging.conversation(viewer, id),
+        exact: true,
+      });
       if (
         useAuthStore.getState().user?.id !== viewer ||
         version !== getAuthSessionVersion()
@@ -141,6 +150,11 @@ export function useReadConversation(viewer: string, id: string) {
           };
         },
       );
+      // A policy refresh may have been cancelled above; revalidate all detail fields too.
+      void client.invalidateQueries({
+        queryKey: QUERY_KEYS.messaging.conversation(viewer, id),
+        exact: true,
+      });
       void client.invalidateQueries({
         queryKey: QUERY_KEYS.messaging.conversations(viewer),
       });

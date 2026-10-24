@@ -16,6 +16,7 @@ import { getProfileByUsername } from "@/lib/api/users";
 import {
   conversationPreview,
   matchesConversation,
+  orderedConversations,
 } from "@/lib/messaging/model";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -114,13 +115,9 @@ function MessagingSession({
   const connected = useRealtimeStore(
     (state) => state.userId === viewer && state.connected,
   );
-  const conversations = [
-    ...new Map(
-      list.data?.pages
-        .flatMap((page) => page.data)
-        .map((row) => [row.id, row]) ?? [],
-    ).values(),
-  ];
+  const conversations = orderedConversations(
+    list.data?.pages.flatMap((page) => page.data) ?? [],
+  );
   const filtered = conversations.filter((row) =>
     matchesConversation(row, search),
   );

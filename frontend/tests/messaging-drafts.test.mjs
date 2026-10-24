@@ -71,6 +71,36 @@ function harness(t, { owner = null, session = 1 } = {}) {
 }
 
 const userA = randomUUID(), userB = randomUUID(), chat = randomUUID();
+const scroll = { key: `${userA}:${randomUUID()}`, sequence: "9007199254740000", offset: -12, top: 400, followLatest: false, newestSequence: "9007199254740993" };
+
+test("scroll restoration is private to the current session, survives token rotation, and is cleared on logout", (t) => {
+  const h = harness(t, { owner: userA }); h.mount();
+  h.saveMessageScrollPosition(userA, chat, scroll);
+  assert.deepEqual(h.getMessageScrollPosition(userA, chat), scroll);
+  assert.equal(h.getMessageScrollPosition(userB, chat), undefined);
+  h.notifyToken();
+  assert.deepEqual(h.getMessageScrollPosition(userA, chat), scroll);
+  h.replaceSession();
+  assert.equal(h.getMessageScrollPosition(userA, chat), undefined);
+  h.saveMessageScrollPosition(userA, chat, scroll);
+  h.setUser(userB);
+  h.saveMessageScrollPosition(userA, chat, scroll);
+  assert.deepEqual(h.state().scrollPositions, {});
+  h.setUser(null);
+  assert.deepEqual(h.state().scrollPositions, {});
+});
+
+test("scroll positions use a bounded recent-conversation cache", (t) => {
+  const h = harness(t, { owner: userA }); h.mount();
+  const ids = Array.from({ length: 101 }, () => randomUUID());
+  for (const id of ids) h.saveMessageScrollPosition(userA, id, scroll);
+  assert.equal(Object.keys(h.state().scrollPositions).length, 100);
+  assert.equal(h.getMessageScrollPosition(userA, ids[0]), undefined);
+  h.saveMessageScrollPosition(userA, ids[1], scroll);
+  h.saveMessageScrollPosition(userA, randomUUID(), scroll);
+  assert.deepEqual(h.getMessageScrollPosition(userA, ids[1]), scroll);
+  assert.equal(h.getMessageScrollPosition(userA, ids[2]), undefined);
+});
 const shareAttempt = () => ({ status: "failed", input: { client_message_id: randomUUID(), message_type: "shared_post", shared_resource_id: randomUUID(), content: "Hẹn nhau ở Đà Lạt" } });
 
 test("failed share attempts survive token refresh and disappear on logout or session replacement", (t) => {

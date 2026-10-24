@@ -153,6 +153,25 @@ export function conversationPreview(conversation: Conversation): string {
   }
 }
 
+/** Sort the activity timestamp with PostgreSQL microseconds, including non-UTC offsets. */
+function activityTime(value: string): string {
+  const milliseconds = Date.parse(value);
+  if (!Number.isFinite(milliseconds)) return "";
+  const fraction = /[T ]\d{2}:\d{2}:\d{2}(?:\.(\d+))?/.exec(value)?.[1] ?? "";
+  return new Date(milliseconds).toISOString().slice(0, -1) + fraction.padEnd(6, "0").slice(3, 6) + "Z";
+}
+
+/** Later pagination overlap must not replace the fresh first-page snapshot. */
+export function orderedConversations(rows: readonly Conversation[]): Conversation[] {
+  const unique = new Map<string, Conversation>();
+  for (const row of rows) if (!unique.has(row.id)) unique.set(row.id, row);
+  return [...unique.values()].sort((a, b) => {
+    const first = activityTime(a.last_message_at ?? a.created_at);
+    const second = activityTime(b.last_message_at ?? b.created_at);
+    return first < second ? 1 : first > second ? -1 : b.id.localeCompare(a.id);
+  });
+}
+
 function normalizeSearch(value: string): string {
   return value
     .trim()

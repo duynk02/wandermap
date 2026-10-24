@@ -37,7 +37,9 @@ const second = {
   recipient_read_state: { last_read_sequence: null, last_read_at: null },
 };
 let conversations = [conversation, second];
-let listFailure = false, sendMode = "hold", heldSend = null, connected = 0, refuseConnection = false, unfollowMode = "fail";
+let listFailure = false, sendMode = "hold", heldSend = null, connected = 0, refuseConnection = false, unfollowMode = "fail", readFailures = 0;
+let holdRead = false, heldRead = null, holdDetail = false;
+const heldDetails = [];
 const requests = [], mutations = [], exceptions = [], checks = [];
 const fixtureHttp = createServer();
 const fixture = new Server(fixtureHttp, { cors: { origin: new URL(web).origin } });
@@ -120,9 +122,11 @@ try {
       else result = { data: conversations, next_cursor: null, hasMore: false };
     } else if (path.endsWith(`/conversations/${conversationId}/read`) && method === "PATCH") {
       mutations.push({ path, method, input });
+      if (readFailures > 0) { readFailures--; await fulfill(requestId, { message: "Trạng thái đọc tạm thời chưa lưu được" }, 503); return; }
       if (BigInt(input.last_read_sequence) > BigInt(conversation.read_state.last_read_sequence ?? "0")) conversation.read_state = { last_read_sequence: input.last_read_sequence, last_read_at: now() };
       conversation.unread_count = messages.filter((item) => item.sender_id !== userId && BigInt(item.sequence) > BigInt(conversation.read_state.last_read_sequence)).length;
       result = { conversation_id: conversationId, ...conversation.read_state, unread_count: conversation.unread_count };
+      if (holdRead) { heldRead = { requestId, result }; return; }
     } else if (path.endsWith(`/conversations/${conversationId}/messages`) && method === "POST") {
       mutations.push({ path, method, input });
       if (sendMode === "hold") { assert.equal(heldSend, null, "only one pending send"); heldSend = { requestId, input }; return; }
@@ -137,7 +141,10 @@ try {
     } else if (path.includes(`/conversations/${conversationId}/messages/`)) {
       result = messages.find((item) => item.id === path.split("/").at(-1));
       if (!result) { status = 404; result = { message: "Không tìm thấy tin nhắn" }; }
-    } else if (path.endsWith(`/conversations/${conversationId}`)) result = conversation;
+    } else if (path.endsWith(`/conversations/${conversationId}`)) {
+      result = conversation;
+      if (holdDetail) { heldDetails.push({ requestId, result: structuredClone(result) }); return; }
+    }
     else if (path.endsWith(`/conversations/${secondId}/messages`)) result = { data: [], hasMore: false, next_cursor: null };
     else if (path.endsWith(`/conversations/${secondId}`)) result = second;
     else if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
@@ -295,18 +302,57 @@ try {
   assert.ok(Math.abs(afterAnchor - anchor.top) < 20, `older page preserves anchor (${anchor.top} -> ${afterAnchor})`);
   checks.push("loading older messages preserves the viewport anchor");
 
+  await evaluate(`(()=>{const h=document.querySelector('[data-testid="message-history"]');h.scrollTop=400;h.dispatchEvent(new Event('scroll'));})()`);
+  await pause(120);
+  const savedViewport = await evaluate(`(()=>{const h=document.querySelector('[data-testid="message-history"]');const n=Array.from(h.querySelectorAll('[data-message-key]')).find(n=>n.getBoundingClientRect().bottom>h.getBoundingClientRect().top);return {key:n.dataset.messageKey,offset:n.getBoundingClientRect().top-h.getBoundingClientRect().top};})()`);
+  const readsBeforeLeaving = readCount();
+  await evaluate(`document.querySelector('a[href="/messages/${secondId}"]').click()`);
+  await until(() => textIncludes("Gửi lời chào đầu tiên"), "other empty conversation");
+  const whileAway = message(BigInt(messages.at(-1).sequence) + 1n, "Tin mới trong lúc mình đang xem cuộc trò chuyện khác");
+  messages.push(whileAway); conversation.last_message = whileAway; conversation.last_message_at = whileAway.created_at; conversation.unread_count = 1;
+  emitMessage(whileAway);
+  await until(() => evaluate(`document.querySelector('a[title="Tin nhắn"]')?.getAttribute('aria-label').includes('1 cuộc trò chuyện')`), "unread conversation badge while away");
+  await evaluate(`document.querySelector('a[href="/messages/${conversationId}"]').click()`);
+  await until(() => visible(`[data-message-key="${savedViewport.key}"]`), "cached history restored");
+  await until(() => evaluate(`(()=>{const h=document.querySelector('[data-testid="message-history"]');const n=h.querySelector('[data-message-key="${savedViewport.key}"]');return n&&Math.abs(n.getBoundingClientRect().top-h.getBoundingClientRect().top-(${savedViewport.offset}))<16;})()`), "same viewport anchor restored");
+  await until(() => textIncludes("Tin nhắn mới"), "new-message indicator after returning to history");
+  assert.equal(readCount(), readsBeforeLeaving, "restoring old history never acknowledges the new tail");
+  assert.equal(await evaluate(`document.querySelector('[data-testid="conversation-list"] a[href^="/messages/"]').getAttribute('href')`), `/messages/${conversationId}`);
+  checks.push("returning to a chat restores the reading anchor, preserves unread badge and orders recent conversations without marking unseen messages read");
+
+  readFailures = 1;
+  const cursorBeforeFailure = conversation.read_state.last_read_sequence;
+  await clickText("Tin nhắn mới");
+  await until(() => visible('button[aria-label="Thử lại trạng thái đọc"]'), "read error is actionable");
+  assert.equal(conversation.read_state.last_read_sequence, cursorBeforeFailure, "failed read keeps authoritative cursor");
+  await evaluate(`(()=>{const h=document.querySelector('[data-testid="message-history"]');h.scrollTop=0;h.dispatchEvent(new Event('scroll'));})()`);
+  await until(() => evaluate(`document.querySelector('button[aria-label="Thử lại trạng thái đọc"]').disabled`), "read retry disabled away from tail");
+  await evaluate(`(()=>{const h=document.querySelector('[data-testid="message-history"]');h.scrollTop=h.scrollHeight;h.dispatchEvent(new Event('scroll'));})()`);
+  await until(() => evaluate(`!document.querySelector('button[aria-label="Thử lại trạng thái đọc"]').disabled`), "visible read retry enabled");
+  await evaluate(`document.querySelector('button[aria-label="Thử lại trạng thái đọc"]').click()`);
+  await until(() => conversation.read_state.last_read_sequence === whileAway.sequence, "manual read retry commits");
+  await until(() => evaluate(`document.querySelector('a[title="Tin nhắn"]').getAttribute('aria-label')==='Tin nhắn'`), "read retry clears badge from REST");
+  checks.push("read failure preserves unread state; retry works only for a visible tail and clears badges after server confirmation");
+
   await evaluate(`window.__fixtureVisibility='hidden';document.dispatchEvent(new Event('visibilitychange'))`);
   const readsBeforeHidden = readCount();
   const hiddenMessage = message(BigInt(messages.at(-1).sequence) + BigInt(1), "Tin nhắn khi tab đang ở nền");
   messages.push(hiddenMessage); conversation.last_message = hiddenMessage; conversation.unread_count = 1; emitMessage(hiddenMessage);
   await pause(500);
   assert.equal(readCount(), readsBeforeHidden, "background tab does not advance read state");
+  holdRead = true;
   await evaluate(`window.__fixtureVisibility='visible';document.dispatchEvent(new Event('visibilitychange'))`);
+  await until(() => !!heldRead, "read confirmation held before policy change");
   checks.push("background tab does not mark incoming messages read");
 
+  holdDetail = true;
   conversation.can_send = false; conversation.recipient.is_active = false;
   fixture.of("/realtime").emit("conversation:updated", { event_id: randomUUID(), conversation_id: conversationId, recipient_id: userId, reason: "policy", message_id: null });
+  await until(() => heldDetails.length > 0, "policy detail request overlaps pending read response");
+  holdDetail = false; holdRead = false;
+  await fulfill(heldRead.requestId, heldRead.result); heldRead = null;
   await until(() => evaluate(`!document.querySelector('[data-testid="message-composer"]')||document.querySelector('[data-testid="message-composer"]').disabled`), "unavailable recipient disables sending");
+  for (const response of heldDetails.splice(0)) await fulfill(response.requestId, response.result).catch(() => {}); // Read confirmation cancels this older request.
   assert.ok(await evaluate(`/không còn|không thể gửi|không khả dụng/i.test(document.body.textContent)`), "unavailable recipient explanation");
   await capture("desktop-recipient-unavailable.png");
   conversation.can_send = true; conversation.recipient.is_active = true;
@@ -318,7 +364,7 @@ try {
   refuseConnection = false;
   const beforeReconnect = connected;
   await until(() => connected > beforeReconnect, "fixture reconnect");
-  checks.push("recipient availability and temporary connection errors have explicit UI states");
+  checks.push("read confirmation revalidates overlapping policy changes; unavailable recipients and temporary connection errors have explicit UI states");
 
   await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await until(() => visible('[data-testid="chat-panel"]'), "mobile chat detail");

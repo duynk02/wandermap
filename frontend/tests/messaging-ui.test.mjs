@@ -3,7 +3,7 @@ import test from "node:test";
 import { randomUUID } from "node:crypto";
 import {
   MESSAGE_MAX_LENGTH, conversationPreview, isMessageRead, matchesConversation, messageTextLength,
-  mergeDisplayMessages, safeMessageHref, validateMessageText,
+  mergeDisplayMessages, orderedConversations, safeMessageHref, validateMessageText,
 } from "../src/lib/messaging/model.ts";
 
 const owner = randomUUID(), recipient = randomUUID(), chat = randomUUID();
@@ -23,6 +23,17 @@ const conversation = (extra = {}) => ({
   can_send: true, blocked_by_me: false, read_state: { last_read_sequence: null, last_read_at: null },
   recipient_read_state: { last_read_sequence: null, last_read_at: null }, unread_count: 0,
   last_message: message(), ...extra,
+});
+
+test("conversation activity keeps microseconds/UUID order and the first fresh snapshot across overlapping pages", () => {
+  const a = conversation({ id: "10000000-0000-4000-8000-000000000000", last_message_at: "2026-10-24T12:00:00.123001Z", unread_count: 4 });
+  const b = conversation({ id: "20000000-0000-4000-8000-000000000000", last_message_at: "2026-10-24T19:00:00.123002+07:00" });
+  const c = conversation({ id: "30000000-0000-4000-8000-000000000000", last_message_at: b.last_message_at });
+  const empty = conversation({ id: randomUUID(), last_message_at: null, created_at: "2026-10-24T12:00:00.124Z" });
+  const result = orderedConversations([a, b, c, { ...a, unread_count: 0 }, empty]);
+  assert.deepEqual(result.map((row) => row.id), [empty.id, c.id, b.id, a.id]);
+  assert.equal(result.at(-1), a);
+  assert.equal(result.at(-1).unread_count, 4);
 });
 
 test("message validation rejects Unicode whitespace and keeps the original draft intact", () => {

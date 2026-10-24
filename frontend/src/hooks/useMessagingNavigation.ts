@@ -4,17 +4,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS } from "@/constants";
 import { useAuth } from "@/hooks/useAuth";
 import { ApiError, getAuthSessionVersion } from "@/lib/api/client";
-import { getMessagingUnreadCount, startDirectConversation } from "@/lib/api/messaging";
+import {
+  getMessagingUnreadCount,
+  startDirectConversation,
+} from "@/lib/api/messaging";
 import { useAuthStore } from "@/stores/authStore";
 import { useRealtimeStore } from "@/stores/realtimeStore";
+import { readMessagingSession } from "@/lib/messaging/session";
 
 /** The badge counts conversations, while the cached response retains both API counters. */
 export function useMessagingUnreadCount(): number {
   const { user } = useAuth();
-  const connected = useRealtimeStore((state) => state.connected && state.userId === user?.id);
+  const viewer = user?.id ?? "guest";
+  const connected = useRealtimeStore(
+    (state) => state.connected && state.userId === user?.id,
+  );
   const { data } = useQuery({
     queryKey: QUERY_KEYS.messaging.unreadCount(user?.id ?? "guest"),
-    queryFn: ({ signal }) => getMessagingUnreadCount(signal),
+    queryFn: ({ signal }) =>
+      readMessagingSession(viewer, () => getMessagingUnreadCount(signal)),
     enabled: !!user,
     refetchInterval: connected ? false : 30_000,
     refetchOnWindowFocus: false,
@@ -32,25 +40,40 @@ export function useStartConversation() {
     onMutate: () => ({ viewer, session: getAuthSessionVersion() }),
     mutationFn: (recipientId: string) => {
       if (!viewer || useAuthStore.getState().user?.id !== viewer) {
-        throw new ApiError(401, "AUTH_SESSION_CHANGED", "Vui lòng đăng nhập để nhắn tin.");
+        throw new ApiError(
+          401,
+          "AUTH_SESSION_CHANGED",
+          "Vui lòng đăng nhập để nhắn tin.",
+        );
       }
       return startDirectConversation(recipientId);
     },
     onSuccess: (result, _recipientId, context) => {
       const owner = context.viewer;
       if (!owner) return;
-      const current = () => useAuthStore.getState().user?.id === owner
-        && getAuthSessionVersion() === context.session;
+      const current = () =>
+        useAuthStore.getState().user?.id === owner &&
+        getAuthSessionVersion() === context.session;
       if (current()) {
-        queryClient.setQueryData(QUERY_KEYS.messaging.conversation(owner, result.conversation.id), result.conversation);
+        queryClient.setQueryData(
+          QUERY_KEYS.messaging.conversation(owner, result.conversation.id),
+          result.conversation,
+        );
       }
       if (current()) {
-        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messaging.conversations(owner) });
+        void queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.messaging.conversations(owner),
+        });
       }
       if (current()) {
-        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messaging.unreadCount(owner) });
+        void queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.messaging.unreadCount(owner),
+        });
       }
-      if (current()) void queryClient.invalidateQueries({ queryKey: [...QUERY_KEYS.messaging.viewer(owner), "contacts"] });
+      if (current())
+        void queryClient.invalidateQueries({
+          queryKey: [...QUERY_KEYS.messaging.viewer(owner), "contacts"],
+        });
     },
   });
 }

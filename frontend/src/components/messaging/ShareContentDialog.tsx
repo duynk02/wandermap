@@ -15,6 +15,7 @@ import {
   matchesConversation,
   messageTextLength,
   MESSAGE_MAX_LENGTH,
+  orderedConversations,
 } from "@/lib/messaging/model";
 import type { ShareDestination, ShareTarget } from "@/lib/messaging/share";
 import { cn } from "@/lib/utils";
@@ -54,13 +55,9 @@ export function ShareContentDialog({
     enabled: !!lookup,
     retry: false,
   });
-  const conversations = [
-    ...new Map(
-      list.data?.pages
-        .flatMap((page) => page.data)
-        .map((row) => [row.id, row]) ?? [],
-    ).values(),
-  ].filter((row) => matchesConversation(row, search));
+  const conversations = orderedConversations(
+    list.data?.pages.flatMap((page) => page.data) ?? [],
+  ).filter((row) => matchesConversation(row, search));
   const blocked = !!target.restriction || share.isPending || !!sent;
   const current = () =>
     useAuthStore.getState().user?.id === viewer &&

@@ -38,6 +38,10 @@ import {
 } from "@/lib/messaging/model";
 import { cn } from "@/lib/utils";
 import { useRealtimeStore } from "@/stores/realtimeStore";
+import {
+  getMessageScrollPosition,
+  saveMessageScrollPosition,
+} from "@/stores/messageDraftStore";
 import { SharedContentCard } from "./SharedContentCard";
 import { ConversationActions } from "./ConversationActions";
 import type { ChatMessage, Conversation } from "@/types/messaging";
@@ -60,6 +64,7 @@ export function ChatPanel({
     conversationId,
     !!detail.data && !detail.isError,
   );
+  const fetchNextPage = history.fetchNextPage;
   const confirmed = useMemo(
     () => history.data?.pages.flatMap((page) => page.data) ?? [],
     [history.data],
@@ -75,6 +80,18 @@ export function ChatPanel({
   const bottom = useRef(true);
   const initialized = useRef(false);
   const previousNewest = useRef<string | null>(null);
+  const initialPosition = useRef(
+    getMessageScrollPosition(viewer, conversationId),
+  );
+  const readingAnchor = useRef<{
+    key: string;
+    offset: number;
+    sequence: string | null;
+  } | null>(null);
+  const restoringAnchor = useRef(false);
+  const restorePages = useRef(0);
+  const [restoringHistory, setRestoringHistory] = useState(false);
+  const newestSequence = useRef<string | null>(null);
   const anchor = useRef<{
     key: string;
     offset: number;
@@ -104,6 +121,7 @@ export function ChatPanel({
     [rows],
   );
   const conversation = detail.data;
+  newestSequence.current = latest?.sequence ?? null;
   const unavailable =
     detail.isError &&
     detail.error instanceof ApiError &&
@@ -128,6 +146,53 @@ export function ChatPanel({
     };
   }, []);
 
+  const savePosition = useCallback(() => {
+    const element = scroller.current;
+    if (
+      !initialized.current ||
+      restoringAnchor.current ||
+      !element ||
+      !element.clientHeight
+    )
+      return;
+    const top = element.getBoundingClientRect().top;
+    const node = [
+      ...element.querySelectorAll<HTMLElement>("[data-message-key]"),
+    ].find((item) => item.getBoundingClientRect().bottom > top);
+    const position = {
+      key: node?.dataset.messageKey ?? null,
+      sequence: node?.dataset.messageSequence ?? null,
+      offset: node ? node.getBoundingClientRect().top - top : 0,
+      top: element.scrollTop,
+      followLatest: bottom.current,
+      newestSequence: newestSequence.current,
+    };
+    readingAnchor.current = position.key
+      ? {
+          key: position.key,
+          offset: position.offset,
+          sequence: position.sequence,
+        }
+      : null;
+    saveMessageScrollPosition(viewer, conversationId, position);
+  }, [viewer, conversationId]);
+
+  const restoreReadingAnchor = useCallback(() => {
+    const element = scroller.current;
+    const saved = readingAnchor.current;
+    if (!element || !saved) return;
+    const node = [
+      ...element.querySelectorAll<HTMLElement>("[data-message-key]"),
+    ].find((item) => item.dataset.messageKey === saved.key);
+    if (node)
+      element.scrollTop +=
+        node.getBoundingClientRect().top -
+        element.getBoundingClientRect().top -
+        saved.offset;
+  }, []);
+
+  useLayoutEffect(() => () => savePosition(), [savePosition]);
+
   const updatePosition = useCallback(() => {
     const element = scroller.current;
     if (!element) return;
@@ -137,7 +202,8 @@ export function ChatPanel({
     bottom.current = distance < 72;
     setAtBottom(next);
     if (next) setNewMessages(false);
-  }, []);
+    savePosition();
+  }, [savePosition]);
 
   const scrollToBottom = useCallback(() => {
     const element = scroller.current;
@@ -146,11 +212,78 @@ export function ChatPanel({
     bottom.current = true;
     setAtBottom(true);
     setNewMessages(false);
-  }, []);
+    savePosition();
+  }, [savePosition]);
 
   useLayoutEffect(() => {
     const element = scroller.current;
     if (!element || !history.data) return;
+    const wanted = initialized.current
+      ? (bottom.current ? null : readingAnchor.current)
+      : initialPosition.current;
+    const wantedNode =
+      wanted?.key &&
+      [...element.querySelectorAll<HTMLElement>("[data-message-key]")].find(
+        (item) => item.dataset.messageKey === wanted.key,
+      );
+    const oldestSequence = confirmed.reduce<string | null>(
+      (oldest, message) =>
+        oldest === null || BigInt(message.sequence) < BigInt(oldest)
+          ? message.sequence
+          : oldest,
+      null,
+    );
+    // A refreshed head can shift older page boundaries beyond the row being read.
+    // Fetch the missing range from REST rather than retain stale, potentially private rows.
+    if (
+      wanted &&
+      !("followLatest" in wanted && wanted.followLatest) &&
+      !wantedNode &&
+      wanted.sequence &&
+      oldestSequence &&
+      BigInt(oldestSequence) > BigInt(wanted.sequence) &&
+      history.hasNextPage &&
+      restorePages.current < 10
+    ) {
+      restoringAnchor.current = true;
+      bottom.current = false;
+      setAtBottom(false);
+      setRestoringHistory(true);
+      if (!history.isFetching && !history.isError) {
+        restorePages.current += 1;
+        void fetchNextPage();
+      }
+      return;
+    }
+    restoringAnchor.current = false;
+    setRestoringHistory(false);
+    if (!initialized.current) {
+      const saved = initialPosition.current;
+      const node =
+        saved && !saved.followLatest && saved.key
+          ? [
+              ...element.querySelectorAll<HTMLElement>("[data-message-key]"),
+            ].find((item) => item.dataset.messageKey === saved.key)
+          : undefined;
+      initialized.current = true;
+      if (node && saved) {
+        element.scrollTop +=
+          node.getBoundingClientRect().top -
+          element.getBoundingClientRect().top -
+          saved.offset;
+        bottom.current = false;
+        updatePosition();
+        if (
+          !bottom.current &&
+          latest &&
+          saved.newestSequence &&
+          BigInt(latest.sequence) > BigInt(saved.newestSequence)
+        )
+          setNewMessages(true);
+      } else scrollToBottom();
+      previousNewest.current = latest?.sequence ?? null;
+      return;
+    }
     // Compare committed sequence independently from failed/pending rows at the tail.
     if (
       initialized.current &&
@@ -173,9 +306,11 @@ export function ChatPanel({
         : saved.top + element.scrollHeight - saved.height;
       if (!history.isFetchingNextPage) anchor.current = null;
       updatePosition();
-    } else if (!initialized.current || bottom.current) {
+    } else if (bottom.current) {
       scrollToBottom();
-      initialized.current = true;
+    } else {
+      restoreReadingAnchor();
+      updatePosition();
     }
     previousNewest.current = latest?.sequence ?? null;
   }, [
@@ -183,26 +318,61 @@ export function ChatPanel({
     latest,
     history.data,
     history.isFetchingNextPage,
+    history.isFetching,
+    history.isError,
+    history.hasNextPage,
+    fetchNextPage,
+    confirmed,
     scrollToBottom,
     updatePosition,
+    restoreReadingAnchor,
   ]);
 
   useEffect(() => {
     const element = scroller.current;
     if (!element) return;
     const observer = new ResizeObserver(() => {
+      if (restoringAnchor.current) return;
       if (bottom.current && !anchor.current) scrollToBottom();
-      else updatePosition();
+      else {
+        if (!anchor.current) restoreReadingAnchor();
+        updatePosition();
+      }
     });
     observer.observe(element);
     // Preview images/loading states can resize content without resizing the viewport.
     if (messageList.current) observer.observe(messageList.current);
     return () => observer.disconnect();
-  }, [history.isPending, hasMessages, scrollToBottom, updatePosition]);
+  }, [
+    history.isPending,
+    hasMessages,
+    scrollToBottom,
+    updatePosition,
+    restoreReadingAnchor,
+  ]);
+
+  const latestIsVisible = useCallback(() => {
+    const element = scroller.current;
+    const node =
+      element &&
+      latest &&
+      [...element.querySelectorAll<HTMLElement>("[data-message-key]")].find(
+        (item) =>
+          item.dataset.messageKey ===
+          `${latest.sender_id}:${latest.client_message_id}`,
+      );
+    if (!element || !node) return false;
+    const rowBounds = node.getBoundingClientRect(),
+      bounds = element.getBoundingClientRect();
+    return (
+      rowBounds.bottom <= bounds.bottom + 1 && rowBounds.bottom > bounds.top
+    );
+  }, [latest]);
 
   useEffect(() => {
     if (
       !visible ||
+      restoringHistory ||
       !atBottom ||
       !latest ||
       !conversation ||
@@ -214,22 +384,7 @@ export function ChatPanel({
         BigInt(conversation.read_state.last_read_sequence ?? "0")
     )
       return;
-    const element = scroller.current;
-    const node =
-      element &&
-      [...element.querySelectorAll<HTMLElement>("[data-message-key]")].find(
-        (item) =>
-          item.dataset.messageKey ===
-          `${latest.sender_id}:${latest.client_message_id}`,
-      );
-    if (
-      !element ||
-      !node ||
-      node.getBoundingClientRect().bottom >
-        element.getBoundingClientRect().bottom + 1 ||
-      node.getBoundingClientRect().bottom <= element.getBoundingClientRect().top
-    )
-      return;
+    if (!latestIsVisible()) return;
     // The latest committed row has been rendered at the visible end of this chat.
     readAttempt.current = latest.sequence;
     read.mutate(latest.sequence);
@@ -241,6 +396,8 @@ export function ChatPanel({
     detail.isError,
     history.isFetching,
     read,
+    latestIsVisible,
+    restoringHistory,
   ]);
 
   const loadOlder = () => {
@@ -297,7 +454,11 @@ export function ChatPanel({
                 @{conversation.recipient.username}
               </p>
             </div>
-            <ConversationActions key={conversation.id} viewer={viewer} conversation={conversation} />
+            <ConversationActions
+              key={conversation.id}
+              viewer={viewer}
+              conversation={conversation}
+            />
           </>
         ) : (
           <h2 className="text-base font-semibold text-ink">Cuộc trò chuyện</h2>
@@ -363,6 +524,27 @@ export function ChatPanel({
               >
                 Thử lại
               </button>
+            </p>
+          )}
+          {restoringHistory && (
+            <p
+              role="status"
+              className="shrink-0 px-4 py-2 text-xs text-ink-muted"
+            >
+              {history.isError ? (
+                <>
+                  Chưa khôi phục được vị trí đọc.{" "}
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={() => void history.fetchNextPage()}
+                  >
+                    Thử lại
+                  </button>
+                </>
+              ) : (
+                "Đang khôi phục vị trí đọc…"
+              )}
             </p>
           )}
           <div className="relative flex min-h-0 flex-1 flex-col">
@@ -484,10 +666,28 @@ export function ChatPanel({
               Chưa xác nhận được trạng thái đọc.{" "}
               <button
                 type="button"
-                className="underline"
+                aria-label="Thử lại trạng thái đọc"
+                disabled={
+                  !visible ||
+                  !atBottom ||
+                  history.isFetching ||
+                  restoringHistory ||
+                  read.isPending
+                }
+                className="underline disabled:opacity-50"
                 onClick={() => {
-                  if (latest && atBottom && visible)
+                  if (
+                    latest &&
+                    atBottom &&
+                    visible &&
+                    !history.isFetching &&
+                    !restoringHistory &&
+                    !detail.isError &&
+                    latestIsVisible()
+                  ) {
+                    readAttempt.current = latest.sequence;
                     read.mutate(latest.sequence);
+                  }
                 }}
               >
                 Thử lại
@@ -633,6 +833,9 @@ function MessageBubble({
   return (
     <li
       data-message-key={row.key}
+      data-message-sequence={
+        row.kind === "server" ? row.message.sequence : undefined
+      }
       data-delivery={status}
       className={cn(
         "flex items-end gap-2",

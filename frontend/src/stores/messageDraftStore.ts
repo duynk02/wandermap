@@ -11,11 +11,20 @@ export interface Draft {
   text: string;
   messages: LocalMessage[];
 }
+export interface MessageScrollPosition {
+  key: string | null;
+  sequence: string | null;
+  offset: number;
+  top: number;
+  followLatest: boolean;
+  newestSequence: string | null;
+}
 interface DraftState {
   owner: string | null;
   session: number;
   drafts: Record<string, Draft>;
   shareAttempts: Record<string, ShareAttempt>;
+  scrollPositions: Record<string, MessageScrollPosition>;
 }
 
 /** Private drafts and optimistic messages stay in memory for exactly one auth session. */
@@ -24,6 +33,7 @@ export const useMessageDraftStore = create<DraftState>(() => ({
   session: getAuthSessionVersion(),
   drafts: {},
   shareAttempts: {},
+  scrollPositions: {},
 }));
 
 export function resetMessageDrafts(owner: string | null) {
@@ -35,8 +45,42 @@ export function resetMessageDrafts(owner: string | null) {
       session,
       drafts: {},
       shareAttempts: {},
+      scrollPositions: {},
     });
   }
+}
+
+/** Only message identities/geometry, never content or browser storage. Bounded per session. */
+export function saveMessageScrollPosition(
+  viewer: string,
+  id: string,
+  position: MessageScrollPosition,
+) {
+  useMessageDraftStore.setState((state) => {
+    if (
+      useAuthStore.getState().user?.id !== viewer ||
+      state.owner !== viewer ||
+      state.session !== getAuthSessionVersion()
+    )
+      return state;
+    const positions = new Map(Object.entries(state.scrollPositions));
+    positions.delete(id);
+    positions.set(id, position);
+    if (positions.size > 100) positions.delete(positions.keys().next().value!);
+    return { scrollPositions: Object.fromEntries(positions) };
+  });
+}
+
+export function getMessageScrollPosition(
+  viewer: string,
+  id: string,
+): MessageScrollPosition | undefined {
+  const state = useMessageDraftStore.getState();
+  return state.owner === viewer &&
+    state.session === getAuthSessionVersion() &&
+    useAuthStore.getState().user?.id === viewer
+    ? state.scrollPositions[id]
+    : undefined;
 }
 
 export function updateShareAttempt(

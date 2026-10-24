@@ -354,6 +354,7 @@ Roadmap là **kế hoạch**, không phải các tính năng được xác nhậ
 - [x] Messaging 1–1, danh sách conversations, lịch sử tin nhắn và read receipts; [Frontend Messaging UI — Feature 4](docs/phase-4-feature-4.md).
 - [x] Chia sẻ bài đăng, địa điểm và hành trình vào cuộc trò chuyện; [Share Content — Feature 5](docs/phase-4-feature-5.md).
 - [x] Danh sách followers/following trên profile; danh bạ Bạn bè và Người theo dõi có thể thu gọn, theo dõi lại ngay trong Tin nhắn; [chi tiết](docs/phase-4-mutual-follow.md).
+- [x] Hoàn thiện unread/read state, thứ tự hội thoại, khôi phục vị trí đọc và xác minh tích hợp nhiều user/tab/device, hồi quy Notifications; [Steps 6–7 và kết quả kiểm thử](docs/phase-4-steps-6-7.md).
 - [ ] Bổ sung chặn/báo cáo người dùng và cơ chế chống spam.
 - [ ] Nhóm trò chuyện, typing/presence là mở rộng sau MVP.
 

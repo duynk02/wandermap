@@ -10,17 +10,16 @@ bản mới; xem [contract, triển khai và kiểm thử](../docs/phase-3-step-
 chưa triển khai.
 
 Phase 4 Feature 1 bổ sung schema direct conversations/messages, sender-scoped
-idempotency key, thứ tự sequence và read cursor. Chạy migration 013 khi triển khai;
-REST/socket/UI messaging chưa triển khai ở bước này. Xem [thiết kế, protocol SQL và
-kiểm thử PostgreSQL](../docs/phase-4-feature-1.md).
+idempotency key, thứ tự sequence và read cursor. Chạy migration 013 khi triển khai.
+Xem [thiết kế, protocol SQL và kiểm thử PostgreSQL](../docs/phase-4-feature-1.md).
 
 Phase 4 Feature 2 có Messaging REST API, cursor pagination, authorization, read/unread,
 idempotency và block nhắn tin tối thiểu (migration 014). Frontend có wrappers/types;
-messaging socket events/UI chưa triển khai. Xem [API contract, policy và kiểm thử](../docs/phase-4-feature-2.md).
+xem [API contract, policy và kiểm thử](../docs/phase-4-feature-2.md).
 
 Phase 4 Feature 3 tích hợp message/read/conversation events sau commit vào namespace
 `/realtime`, user-room fanout và frontend REST reconciliation khi reconnect.
-Chưa có UI chat; xem [event contract, cache synchronization và multi-tab tests](../docs/phase-4-feature-3.md).
+Xem [event contract, cache synchronization và multi-tab tests](../docs/phase-4-feature-3.md).
 
 Phase 4 Features 4–5 bổ sung [giao diện messaging](../docs/phase-4-feature-4.md) và
 [chia sẻ Post/Location/Journey qua chat](../docs/phase-4-feature-5.md). Tái sử dụng
@@ -33,7 +32,9 @@ người chưa từng chat, hoặc người đang chờ theo dõi lại (`kind=f
 API followers/following trả thêm trạng thái quan hệ theo viewer. Hủy theo dõi giữ
 lịch sử và khóa gửi mới; xem [hợp đồng, đồng bộ và kiểm thử](../docs/phase-4-mutual-follow.md).
 
-> **Trạng thái tích hợp:** backend được thêm vào repository nhưng frontend Next.js hiện tại vẫn còn Supabase imports/API routes. Chưa chuyển frontend sang API mới trong phạm vi này. Không xóa Supabase project cũ cho đến khi hoàn tất đồng bộ frontend và kế hoạch chuyển dữ liệu.
+Phase 4 Steps 6–7 hoàn thiện read/unread UX, conversation ordering, scroll restoration
+và xác minh frontend qua REST/Socket.IO/PostGIS thật, gồm multi-user/device và hồi
+quy Phase 3 Notifications. Xem [kết quả, security review và cách chạy lại](../docs/phase-4-steps-6-7.md).
 
 ## Yêu cầu
 
