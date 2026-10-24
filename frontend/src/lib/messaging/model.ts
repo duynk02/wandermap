@@ -2,14 +2,9 @@ import type { ChatMessage, Conversation } from "@/types/messaging";
 
 export const MESSAGE_MAX_LENGTH = 4000;
 
-/** Match the backend's trim transform and validator.js MaxLength Unicode rules. */
+/** Match the backend trim transform and PostgreSQL char_length (Unicode code points). */
 export function messageTextLength(text: string): number {
-  const content = text.trim();
-  const presentationSequences =
-    content.match(/[^\uFE0F\uFE0E][\uFE0F\uFE0E]/g)?.length ?? 0;
-  const surrogatePairs =
-    content.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)?.length ?? 0;
-  return content.length - presentationSequences - surrogatePairs;
+  return Array.from(text.trim()).length;
 }
 
 export function validateMessageText(text: string): string | null {

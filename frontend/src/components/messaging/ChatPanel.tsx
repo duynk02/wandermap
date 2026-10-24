@@ -16,7 +16,6 @@ import {
   CheckCheck,
   CircleAlert,
   Loader2,
-  MapPin,
   Send,
   UserRound,
   WifiOff,
@@ -40,6 +39,7 @@ import {
 } from "@/lib/messaging/model";
 import { cn } from "@/lib/utils";
 import { useRealtimeStore } from "@/stores/realtimeStore";
+import { SharedContentCard } from "./SharedContentCard";
 import type { ChatMessage, Conversation } from "@/types/messaging";
 import {
   MessagingAvatar,
@@ -71,6 +71,7 @@ export function ChatPanel({
   );
   const phase = useRealtimeStore((state) => state.phase);
   const scroller = useRef<HTMLDivElement>(null);
+  const messageList = useRef<HTMLOListElement>(null);
   const bottom = useRef(true);
   const initialized = useRef(false);
   const previousNewest = useRef<string | null>(null);
@@ -89,6 +90,7 @@ export function ChatPanel({
     () => mergeDisplayMessages(confirmed, composer.messages),
     [confirmed, composer.messages],
   );
+  const hasMessages = rows.length > 0;
   const latest = useMemo(
     () =>
       rows.reduce<ChatMessage | null>(
@@ -193,8 +195,10 @@ export function ChatPanel({
       else updatePosition();
     });
     observer.observe(element);
+    // Preview images/loading states can resize content without resizing the viewport.
+    if (messageList.current) observer.observe(messageList.current);
     return () => observer.disconnect();
-  }, [history.isPending, scrollToBottom, updatePosition]);
+  }, [history.isPending, hasMessages, scrollToBottom, updatePosition]);
 
   useEffect(() => {
     if (
@@ -423,7 +427,11 @@ export function ChatPanel({
                       chuyện của bạn tại đây.
                     </MessagingEmpty>
                   ) : (
-                    <ol aria-label="Tin nhắn" className="space-y-4">
+                    <ol
+                      ref={messageList}
+                      aria-label="Tin nhắn"
+                      className="space-y-4"
+                    >
                       {rows.map((row, index) => (
                         <MessageBubble
                           key={row.key}
@@ -440,6 +448,8 @@ export function ChatPanel({
                               composer.send(row.message);
                           }}
                           retryDisabled={!canSend || composer.isPending}
+                          refreshingShared={history.isRefetching}
+                          failedShared={history.isError}
                         />
                       ))}
                     </ol>
@@ -598,6 +608,8 @@ function MessageBubble({
   grouped,
   onRetry,
   retryDisabled,
+  refreshingShared,
+  failedShared,
 }: {
   row: DisplayMessage;
   own: boolean;
@@ -605,6 +617,8 @@ function MessageBubble({
   grouped: boolean;
   onRetry: () => void;
   retryDisabled: boolean;
+  refreshingShared: boolean;
+  failedShared: boolean;
 }) {
   const message = row.message;
   const sent = row.kind === "server";
@@ -659,7 +673,13 @@ function MessageBubble({
             <>
               {message.content && <SafeMessageText text={message.content} />}
               {row.kind === "server" && row.message.message_type !== "text" && (
-                <SharedMessage message={row.message} own={own} />
+                <SharedContentCard
+                  type={row.message.message_type}
+                  resource={row.message.shared_resource}
+                  own={own}
+                  refreshing={refreshingShared}
+                  failed={failedShared}
+                />
               )}
             </>
           )}
@@ -751,50 +771,5 @@ function SafeMessageText({ text }: { text: string }) {
         );
       })}
     </p>
-  );
-}
-
-function SharedMessage({
-  message,
-  own,
-}: {
-  message: ChatMessage;
-  own: boolean;
-}) {
-  const resource = message.shared_resource;
-  if (!resource?.available || !resource.id)
-    return (
-      <p className="text-xs italic opacity-80">
-        Nội dung được chia sẻ không còn khả dụng.
-      </p>
-    );
-  const href =
-    message.message_type === "shared_post"
-      ? ROUTES.post(resource.id)
-      : message.message_type === "shared_location"
-        ? ROUTES.location(resource.id)
-        : ROUTES.journey(resource.id);
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "mt-1 flex items-start gap-2 rounded-xl border p-3",
-        own ? "border-white/25 bg-white/10" : "border-border bg-surface",
-      )}
-    >
-      <MapPin className="mt-1 h-4 w-4 shrink-0" aria-hidden />
-      <span>
-        <span className="block text-[10px] uppercase tracking-wide opacity-75">
-          {message.message_type === "shared_post"
-            ? "Bài viết"
-            : message.message_type === "shared_location"
-              ? "Địa điểm"
-              : "Hành trình"}
-        </span>
-        <span className="line-clamp-2 font-medium">
-          {resource.title || "Khám phá nội dung được chia sẻ"}
-        </span>
-      </span>
-    </Link>
   );
 }

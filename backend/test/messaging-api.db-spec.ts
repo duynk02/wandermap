@@ -438,6 +438,43 @@ describeDatabase('Messaging REST API on PostgreSQL/PostGIS', () => {
     await send(chat.id, { message_type: 'shared_post', shared_resource_id: post, content: null }).expect(404);
   });
 
+  it('rejects forged shared previews and allows only server-resolved resource metadata', async () => {
+    const chat = await conversation();
+    for (const extra of [{ shared_resource: { available: true, title: 'Forged title', image_url: 'https://example.test/forged.webp' } },
+      { title: 'Forged title' }, { coordinates: { lat: 1, lng: 2 } }]) {
+      await send(chat.id, { message_type: 'shared_location', shared_resource_id: location, content: null, ...extra }).expect(400);
+    }
+    expect((await history(chat.id).expect(200)).body.data).toHaveLength(0);
+    const message = await createMessage(chat.id, { message_type: 'shared_location', shared_resource_id: location, content: null });
+    expect(message.shared_resource).toMatchObject({ available: true, id: location, title: 'Đà Lạt', address: 'Lâm Đồng' });
+  });
+
+  it('validates Unicode share captions against database code-point limits before INSERT', async () => {
+    const chat = await conversation();
+    for (const character of ['🗺️', '☀︎']) {
+      const valid = await createMessage(chat.id, { message_type: 'shared_location', shared_resource_id: location, content: character.repeat(2000) });
+      expect(valid.content).toBe(character.repeat(2000));
+      await send(chat.id, { message_type: 'shared_location', shared_resource_id: location, content: character.repeat(2001) }).expect(400);
+    }
+    await createMessage(chat.id, { message_type: 'shared_post', shared_resource_id: post, content: '🌿'.repeat(4000) });
+    await send(chat.id, { message_type: 'shared_post', shared_resource_id: post, content: '🌿'.repeat(4001) }).expect(400);
+  });
+
+  it('rechecks the sending viewer after access is revoked and never reveals cached post metadata', async () => {
+    await pool.query("UPDATE posts SET visibility = 'followers', author_id = $2 WHERE id = $1", [post, outsider]);
+    await pool.query('INSERT INTO follows (follower_id, following_id) VALUES ($1, $3), ($2, $3)', [owner, recipient, outsider]);
+    const chat = await conversation();
+    const key = randomUUID();
+    const message = await createMessage(chat.id, { message_type: 'shared_post', shared_resource_id: post, content: null, client_message_id: key });
+    await pool.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [owner, outsider]);
+    const hidden = (await history(chat.id).expect(200)).body.data.find((row: MessageDto) => row.id === message.id);
+    expect(hidden.shared_resource).toMatchObject({ available: false, id: null, title: null, image_url: null, author: null, location: null });
+    const retry = await send(chat.id, { message_type: 'shared_post', shared_resource_id: post, content: null, client_message_id: key }).expect(201);
+    expect(retry.body).toMatchObject({ created: false, message: { id: message.id, shared_resource: { available: false } } });
+    await send(chat.id, { message_type: 'shared_post', shared_resource_id: post, content: null }).expect(404);
+    expect((await history(chat.id, recipient).expect(200)).body.data.find((row: MessageDto) => row.id === message.id).shared_resource.available).toBe(true);
+  });
+
   it('requires visibility for both sender and recipient, including followers-only posts', async () => {
     const chat = await conversation();
     await pool.query("UPDATE posts SET visibility = 'followers' WHERE id = $1", [post]);

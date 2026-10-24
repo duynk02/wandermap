@@ -11,6 +11,8 @@ import { QUERY_KEYS, ROUTES } from "@/constants";
 import { PostCard } from "@/components/post/PostCard";
 import { cn } from "@/lib/utils";
 import { MarkVisitedButton } from "./MarkVisitedButton";
+import { ShareContentButton } from "@/components/messaging/ShareContentButton";
+import { locationShareTarget } from "@/lib/messaging/share";
 
 async function fetchLocationPreview(id: string) {
   const [location, posts] = await Promise.all([getLocationById(id), getPostsByLocation(id, 1)]);
@@ -105,7 +107,7 @@ function DrawerContent({ data }: { data: Awaited<ReturnType<typeof fetchLocation
           )}
           <span>{location.post_count} bài đăng</span>
         </div>
-        <div className="mt-4"><MarkVisitedButton location={location} /></div>
+        <div className="mt-4 flex flex-wrap items-center gap-3"><MarkVisitedButton location={location} /><ShareContentButton target={locationShareTarget(location)} /></div>
       </div>
 
       {/* Preview posts */}

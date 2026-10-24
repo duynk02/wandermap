@@ -25,6 +25,8 @@ import {
 import { JourneyEditor } from "./JourneyCollection";
 import { JourneyExportButton } from "./JourneyExportButton";
 import { JourneyShareButton } from "./JourneyShareButton";
+import { ShareContentButton } from "@/components/messaging/ShareContentButton";
+import { journeyShareTarget } from "@/lib/messaging/share";
 
 export function JourneyDetail({ id }: { id: string }) {
   const router = useRouter();
@@ -86,7 +88,10 @@ export function JourneyDetail({ id }: { id: string }) {
         type="button"
         onClick={() => {
           if (canGoBackWithinApp()) router.back();
-          else router.replace(`${ROUTES.profile(journey.author.username)}?tab=map`);
+          else
+            router.replace(
+              `${ROUTES.profile(journey.author.username)}?tab=map`,
+            );
         }}
         className="inline-flex min-h-11 items-center gap-2 rounded-lg text-xs font-medium text-ink-muted hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       >
@@ -115,23 +120,37 @@ export function JourneyDetail({ id }: { id: string }) {
                 <Route className="h-4 w-4" />
                 WanderMap Journey
               </p>
-              {owner && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <JourneyShareButton journey={journey} onEdit={() => setEditing(true)} />
-                  <JourneyExportButton
-                    input={{ title: journey.title, points, style: journey.style_config }}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold backdrop-blur hover:bg-white/25"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold backdrop-blur hover:bg-white/25"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Chỉnh sửa
-                  </button>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <ShareContentButton
+                  target={journeyShareTarget(journey)}
+                  label="Gửi qua tin nhắn"
+                  className="min-h-11 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold text-white backdrop-blur hover:bg-white/25 hover:text-white"
+                />
+                {owner && (
+                  <>
+                    <JourneyShareButton
+                      journey={journey}
+                      onEdit={() => setEditing(true)}
+                    />
+                    <JourneyExportButton
+                      input={{
+                        title: journey.title,
+                        points,
+                        style: journey.style_config,
+                      }}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold backdrop-blur hover:bg-white/25"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-3 py-2 text-xs font-semibold backdrop-blur hover:bg-white/25"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Chỉnh sửa
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
             <h1 className="mt-5 break-words text-3xl font-bold md:text-4xl">
               {journey.title}

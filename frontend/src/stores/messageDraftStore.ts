@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { getAuthSessionVersion, subscribeAccessToken } from "@/lib/api/client";
 import type { LocalMessage } from "@/lib/messaging/model";
+import type { ShareAttempt } from "@/lib/messaging/share";
 import { useAuthStore } from "@/stores/authStore";
 
 export interface Draft {
@@ -14,6 +15,7 @@ interface DraftState {
   owner: string | null;
   session: number;
   drafts: Record<string, Draft>;
+  shareAttempts: Record<string, ShareAttempt>;
 }
 
 /** Private drafts and optimistic messages stay in memory for exactly one auth session. */
@@ -21,14 +23,39 @@ export const useMessageDraftStore = create<DraftState>(() => ({
   owner: null,
   session: getAuthSessionVersion(),
   drafts: {},
+  shareAttempts: {},
 }));
 
 export function resetMessageDrafts(owner: string | null) {
   const session = getAuthSessionVersion();
   const previous = useMessageDraftStore.getState();
   if (previous.owner !== owner || previous.session !== session) {
-    useMessageDraftStore.setState({ owner, session, drafts: {} });
+    useMessageDraftStore.setState({
+      owner,
+      session,
+      drafts: {},
+      shareAttempts: {},
+    });
   }
+}
+
+export function updateShareAttempt(
+  viewer: string,
+  key: string,
+  attempt: ShareAttempt | null,
+) {
+  useMessageDraftStore.setState((state) => {
+    if (
+      useAuthStore.getState().user?.id !== viewer ||
+      state.owner !== viewer ||
+      state.session !== getAuthSessionVersion()
+    )
+      return state;
+    const shareAttempts = { ...state.shareAttempts };
+    if (attempt) shareAttempts[key] = attempt;
+    else delete shareAttempts[key];
+    return { shareAttempts };
+  });
 }
 
 export function updateMessageDraft(

@@ -71,6 +71,34 @@ function harness(t, { owner = null, session = 1 } = {}) {
 }
 
 const userA = randomUUID(), userB = randomUUID(), chat = randomUUID();
+const shareAttempt = () => ({ status: "failed", input: { client_message_id: randomUUID(), message_type: "shared_post", shared_resource_id: randomUUID(), content: "Hẹn nhau ở Đà Lạt" } });
+
+test("failed share attempts survive token refresh and disappear on logout or session replacement", (t) => {
+  const h = harness(t, { owner: userA }); h.mount();
+  const attempt = shareAttempt();
+  h.updateShareAttempt(userA, "resource:recipient", attempt);
+  h.notifyToken();
+  assert.equal(h.state().shareAttempts["resource:recipient"], attempt);
+  h.replaceSession();
+  assert.deepEqual(h.state().shareAttempts, {});
+  h.updateShareAttempt(userA, "resource:recipient", attempt);
+  h.setUser(null);
+  assert.deepEqual(h.state().shareAttempts, {});
+});
+
+test("an old viewer or stale session cannot create a shared-content retry for a new account", (t) => {
+  const h = harness(t, { owner: userA }); h.mount();
+  h.setUser(userB);
+  h.updateShareAttempt(userA, "resource:recipient", shareAttempt());
+  assert.deepEqual(h.state().shareAttempts, {});
+  h.updateShareAttempt(userB, "resource:recipient", shareAttempt());
+  assert.equal(Object.keys(h.state().shareAttempts).length, 1);
+  h.updateShareAttempt(userB, "resource:recipient", null);
+  assert.deepEqual(h.state().shareAttempts, {});
+  h.advanceSession();
+  h.updateShareAttempt(userB, "resource:recipient", shareAttempt());
+  assert.deepEqual(h.state().shareAttempts, {});
+});
 const localMessage = (sender = userA, status = "pending") => ({
   client_message_id: randomUUID(), conversation_id: chat, sender_id: sender,
   content: "Hẹn nhau ở Đà Nẵng 🗺️", created_at: "2026-10-23T12:00:00.000Z", status,

@@ -46,7 +46,7 @@ qua toàn bộ cache và UI, không chuyển sequence sang Number.
 
 Composer hỗ trợ Enter gửi, Shift+Enter xuống dòng, IME composition, Unicode và tiếng
 Việt; vô hiệu hóa khi đang gửi. Tin chỉ có whitespace bị chặn. Giới hạn 4000 ký tự
-khớp trim transform và cách đếm Unicode của validator.js phía backend. Nội dung quá
+khớp trim transform và giới hạn Unicode code point của backend/PostgreSQL. Nội dung quá
 dài được giữ để người dùng chỉnh sửa, không tự cắt bản nháp.
 
 `messageDraftStore.ts` không persist. AuthProvider theo dõi auth/token trên mọi route:

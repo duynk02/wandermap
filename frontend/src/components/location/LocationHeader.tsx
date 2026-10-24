@@ -3,6 +3,8 @@ import { CATEGORY_ICONS } from "@/lib/mapbox";
 import type { Location } from "@/types";
 import { MarkVisitedButton } from "./MarkVisitedButton";
 import { LocationBackButton } from "./LocationBackButton";
+import { ShareContentButton } from "@/components/messaging/ShareContentButton";
+import { locationShareTarget } from "@/lib/messaging/share";
 
 interface LocationHeaderProps {
   location: Location;
@@ -44,7 +46,7 @@ export function LocationHeader({ location }: LocationHeaderProps) {
             </div>
           </div>
         </div>
-        <div className="mt-5 pb-3"><MarkVisitedButton location={location} variant="hero" /></div>
+        <div className="mt-5 flex flex-wrap items-center gap-3 pb-3"><MarkVisitedButton location={location} variant="hero" /><ShareContentButton target={locationShareTarget(location)} className="rounded-xl bg-white/10 px-4 py-2 text-white hover:bg-white/20 hover:text-white" /></div>
       </div>
 
       {/* Decorative wave */}

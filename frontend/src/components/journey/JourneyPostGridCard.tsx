@@ -17,6 +17,8 @@ import { QUERY_KEYS, ROUTES } from "@/constants";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { setPostLiked } from "@/lib/api";
 import { usePostSave } from "@/hooks/usePostSave";
+import { ShareContentButton } from "@/components/messaging/ShareContentButton";
+import { postShareTarget } from "@/lib/messaging/share";
 import {
   cn,
   formatCount,
@@ -162,6 +164,7 @@ export function JourneyPostGridCard({ post }: { post: JourneyPost }) {
         </div>
         <div className="mt-auto flex min-w-0 items-center justify-between gap-1 pt-3">
           <div className="flex items-center gap-1">
+            <ShareContentButton target={postShareTarget(post)} iconOnly className="min-h-9" />
             <button
               type="button"
               aria-label={liked ? "Bỏ thích bài đăng" : "Thích bài đăng"}

@@ -34,12 +34,17 @@ test("message validation rejects Unicode whitespace and keeps the original draft
   assert.equal(draft, "  Hẹn ở Đà Nẵng 🗺️\nMang theo máy ảnh nhé!  ");
 });
 
-test("message length matches backend trim and validator.js Unicode presentation rules", () => {
+test("message length matches backend trim and PostgreSQL Unicode code-point limits", () => {
   assert.equal(MESSAGE_MAX_LENGTH, 4000);
-  for (const character of ["ế", "🙂", "🗺️", "☀︎"]) {
+  for (const character of ["ế", "🙂"]) {
     assert.equal(messageTextLength(` \n${character.repeat(4000)}\u00a0 `), 4000);
     assert.equal(validateMessageText(` \n${character.repeat(4000)}\u00a0 `), null, character);
     assert.equal(typeof validateMessageText(character.repeat(4001)), "string", character);
+  }
+  for (const presentationSequence of ["🗺️", "☀︎"]) {
+    assert.equal(messageTextLength(presentationSequence.repeat(2000)), 4000);
+    assert.equal(validateMessageText(presentationSequence.repeat(2000)), null);
+    assert.equal(typeof validateMessageText(presentationSequence.repeat(2001)), "string");
   }
   // Combining marks and ZWJ sequences are not counted as a single grapheme by the backend.
   assert.equal(validateMessageText("a\u0301".repeat(2000)), null);

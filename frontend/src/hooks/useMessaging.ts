@@ -97,6 +97,8 @@ export function useConversationMessages(
     getNextPageParam: (page) =>
       page.hasMore ? (page.next_cursor ?? undefined) : undefined,
     enabled,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
     staleTime: 15_000,
     retry,
     refetchInterval: interval,

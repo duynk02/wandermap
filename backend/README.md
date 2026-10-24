@@ -22,6 +22,11 @@ Phase 4 Feature 3 tích hợp message/read/conversation events sau commit vào n
 `/realtime`, user-room fanout và frontend REST reconciliation khi reconnect.
 Chưa có UI chat; xem [event contract, cache synchronization và multi-tab tests](../docs/phase-4-feature-3.md).
 
+Phase 4 Features 4–5 bổ sung [giao diện messaging](../docs/phase-4-feature-4.md) và
+[chia sẻ Post/Location/Journey qua chat](../docs/phase-4-feature-5.md). Tái sử dụng
+messaging REST và per-viewer resource policy; caption được giới hạn theo Unicode
+code points để khớp PostgreSQL `char_length`. Không cần migration sau 014 cho UI/share.
+
 > **Trạng thái tích hợp:** backend được thêm vào repository nhưng frontend Next.js hiện tại vẫn còn Supabase imports/API routes. Chưa chuyển frontend sang API mới trong phạm vi này. Không xóa Supabase project cũ cho đến khi hoàn tất đồng bộ frontend và kế hoạch chuyển dữ liệu.
 
 ## Yêu cầu

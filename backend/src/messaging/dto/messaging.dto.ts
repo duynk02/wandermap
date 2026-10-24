@@ -36,7 +36,10 @@ export class CreateMessageDto {
 
   @ApiPropertyOptional({ nullable: true, maxLength: MESSAGE_MAX_LENGTH })
   @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
-  @IsOptional() @IsString() @MaxLength(MESSAGE_MAX_LENGTH) content?: string | null;
+  // Match PostgreSQL char_length: variation selectors count as code points too.
+  @IsOptional() @IsString()
+  @Matches(new RegExp(`^[\\s\\S]{0,${MESSAGE_MAX_LENGTH}}$`, 'u'), { message: `content must be shorter than or equal to ${MESSAGE_MAX_LENGTH} characters` })
+  content?: string | null;
 
   @ApiPropertyOptional({ format: 'uuid' })
   @ValidateIf((_object: unknown, value: unknown) => value !== undefined)

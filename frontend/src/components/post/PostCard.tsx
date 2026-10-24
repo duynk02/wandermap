@@ -15,6 +15,8 @@ import { timeAgo, formatCount, getAvatarUrl, getPostImageUrl, cn } from "@/lib/u
 import { ROUTES, QUERY_KEYS } from "@/constants";
 import type { Post } from "@/types";
 import { JourneyPostCard } from "@/components/journey/JourneyPostCard";
+import { ShareContentButton } from "@/components/messaging/ShareContentButton";
+import { postShareTarget } from "@/lib/messaging/share";
 
 interface PostCardProps {
   post: Post;
@@ -167,6 +169,7 @@ function LocationPostCard({ post, compact = false }: PostCardProps & { post: imp
               <Bookmark className={cn("h-4 w-4", saved && "fill-brand-500 text-brand-500")} />
               {formatCount(savesCount)}
             </button>
+            <ShareContentButton target={postShareTarget(post)} iconOnly className="ml-auto" />
           </div>
         )}
       </div>
