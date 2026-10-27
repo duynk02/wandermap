@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, ParseIntPipe, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AccessTokenGuard } from '../common/guards/access-token.guard';
 import { OptionalAccessTokenGuard } from '../common/guards/optional-access-token.guard';
@@ -33,6 +33,17 @@ export class PostsController {
   saved(@CurrentUser() user: AuthenticatedUser, @Query() query: SavedPostQueryDto) {
     return this.posts.saved(user.sub, query);
   }
+
+  @Get('mine/by-location/:locationId')
+  @UseGuards(AccessTokenGuard)
+  @ApiBearerAuth()
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({ summary: 'List own location posts to prefill a visit, including private posts' })
+  mineByLocation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('locationId', new ParseUUIDPipe()) locationId: string,
+    @Query() query: SavedPostQueryDto,
+  ) { return this.posts.mineByLocation(user.sub, locationId, query); }
 
   @Get('by-location/:locationId')
   @ApiOperation({ summary: 'Get public posts at a location' })

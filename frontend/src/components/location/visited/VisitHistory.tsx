@@ -26,6 +26,7 @@ import {
 import { QUERY_KEYS } from "@/constants";
 import type { LocationVisit } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
+import { VisitPostPicker } from "./VisitPostPicker";
 import {
   assertTravelSession,
   fieldClass,
@@ -43,6 +44,7 @@ type Action =
 
 export function VisitHistory({
   markId,
+  locationId,
   viewer,
   disabled,
   onChanged,
@@ -50,6 +52,7 @@ export function VisitHistory({
   onBusy,
 }: {
   markId: string;
+  locationId: string;
   viewer: string;
   disabled: boolean;
   onChanged: () => Promise<void>;
@@ -152,6 +155,8 @@ export function VisitHistory({
           {editing === "new" && (
             <VisitForm
               key="new"
+              locationId={locationId}
+              viewer={viewer}
               pending={blocked}
               onDirty={onDirty}
               onCancel={() => {
@@ -178,6 +183,8 @@ export function VisitHistory({
             editing !== "new" && editing?.id === visit.id ? (
               <VisitForm
                 key={visit.id}
+                locationId={locationId}
+                viewer={viewer}
                 visit={visit}
                 pending={blocked}
                 onDirty={onDirty}
@@ -267,12 +274,16 @@ export function VisitHistory({
 
 function VisitForm({
   visit,
+  locationId,
+  viewer,
   pending,
   onDirty,
   onCancel,
   onSave,
 }: {
   visit?: LocationVisit;
+  locationId: string;
+  viewer: string;
   pending: boolean;
   onDirty: (dirty: boolean) => void;
   onCancel: () => void;
@@ -307,6 +318,11 @@ function VisitForm({
         <p className="text-sm font-semibold text-ink">
           {visit ? "Chỉnh sửa kỷ niệm" : "Thêm một lần ghé thăm"}
         </p>
+        <VisitPostPicker locationId={locationId} viewer={viewer} disabled={busy} onApply={(values) => {
+          form.setValue("visited_at", values.visited_at, { shouldDirty: true, shouldValidate: true });
+          form.setValue("note", values.note, { shouldDirty: true, shouldValidate: true });
+          form.clearErrors("root");
+        }} />
         <div>
           <label
             className="mb-1.5 block text-xs font-medium text-ink"
