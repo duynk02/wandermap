@@ -5,11 +5,11 @@
   "description": "Independent NestJS REST API for WanderMap",
   "license": "UNLICENSED",
   "engines": {
-    "node": ">=20.19"
+    "node": ">=22.23.4 <23"
   },
   "scripts": {
     "dev": "nest start --watch",
-    "build": "nest build",
+    "build": "nest build && node scripts/prepare-migrations.cjs",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
     "type-check": "tsc --noEmit",
@@ -19,6 +19,9 @@
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:db": "jest --config ./test/jest-db.json --runInBand",
+    "test:db:ci": "node scripts/run-db-tests.cjs",
+    "test:startup": "node scripts/verify-startup.cjs",
+    "test:transport": "node --experimental-transform-types --test test/connection-options.node-test.mjs",
     "db:migrate": "tsx src/database/migrate.ts",
     "db:migrate:status": "tsx src/database/migrate.ts --status",
     "db:migrate:prod": "node dist/database/migrate.js"
@@ -36,6 +39,7 @@
     "bcryptjs": "^2.4.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "cloudinary": "2.11.0",
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.7",
     "helmet": "^8.1.0",
@@ -69,6 +73,16 @@
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.24.0"
+  },
+  "overrides": {
+    "@nestjs/platform-express": {
+      "multer": "2.5.0"
+    },
+    "body-parser": "2.4.0",
+    "@nestjs/swagger": {
+      "js-yaml": "5.5.0"
+    },
+    "fast-uri": "3.1.9"
   },
   "jest": {
     "moduleFileExtensions": [

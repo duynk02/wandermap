@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import { useState } from "react";
 import Link from "next/link";
 import { Bookmark, Heart, MapPin, MessageCircle, Star } from "lucide-react";
@@ -20,8 +21,8 @@ import { postShareTarget } from "@/lib/messaging/share";
 const MAX_VISIBLE_IMAGES = 4;
 
 /**
- * Plain <img>: post images are arbitrary https URLs, which next/image would reject unless every
- * host is listed in `remotePatterns`. Each image links to the post detail page.
+ * Managed images load authorized bytes; legacy public images keep their existing URLs.
+ * Each image links to the post detail page.
  */
 function PostImages({ images, postId }: { images: string[]; postId: string }) {
     const shown = images.slice(0, MAX_VISIBLE_IMAGES);
@@ -43,8 +44,8 @@ function PostImages({ images, postId }: { images: string[]; postId: string }) {
                         shown.length === 4 && "aspect-square"
                     )}
                 >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={getPostImageUrl(src)} alt={`Ảnh ${index + 1}`} loading="lazy" className="h-full w-full object-cover" />
+
+                    <MediaImage src={getPostImageUrl(src)} alt={`Ảnh ${index + 1}`} loading="lazy" className="h-full w-full object-cover" />
                     {extra > 0 && index === shown.length - 1 && (
                         <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-2xl font-semibold text-white">
                             +{extra}
@@ -103,8 +104,8 @@ export function FeedPostCard({ post }: { post: Post }) {
                 <div className="flex items-center gap-3 px-4 pt-4">
                     <div className="relative shrink-0">
                         <Link href={ROUTES.profile(post.author.username)} className="block" aria-hidden tabIndex={-1}>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+
+                            <MediaImage
                                 src={getAvatarUrl(post.author.avatar_url, post.author.username)}
                                 alt=""
                                 className="h-10 w-10 rounded-full object-cover"

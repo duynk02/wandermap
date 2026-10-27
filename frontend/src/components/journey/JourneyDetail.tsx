@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
+import { MediaImage as Image } from "@/components/ui/MediaImage";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,

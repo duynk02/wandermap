@@ -1,9 +1,8 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import sharp from 'sharp';
+import { StorageService } from './storage.service';
 
 /** Formats accepted as input. Everything is re-encoded to WebP. SVG is rejected on purpose. */
 const ALLOWED_FORMATS = new Set(['jpeg', 'png', 'webp', 'gif', 'avif']);
@@ -21,20 +20,17 @@ export interface StoredImage {
 export class UploadsService {
   private readonly logger = new Logger(UploadsService.name);
   readonly rootDir: string;
-  private readonly publicBase: string;
 
-  constructor(config: ConfigService) {
+  constructor(config: ConfigService, private readonly storage: StorageService) {
     this.rootDir = path.resolve(config.get<string>('UPLOAD_DIR') || path.join(process.cwd(), 'uploads'));
-    const port = config.get<number>('PORT', 4000);
-    this.publicBase = (config.get<string>('UPLOAD_PUBLIC_URL') || `http://localhost:${port}/uploads`).replace(/\/+$/, '');
   }
 
   /**
    * Validates that the bytes really are an image (the declared MIME type is never trusted),
    * auto-rotates, downsizes, strips all metadata (EXIF GPS included) and stores it as WebP.
-   * The file name is the content hash, so identical uploads are stored once and can be cached forever.
+   * The managed asset is stored privately and delivered only after resource authorization.
    */
-  async saveImage(input: Buffer): Promise<StoredImage> {
+  async saveImage(input: Buffer, owner: string): Promise<StoredImage> {
     let output: { data: Buffer; info: { width: number; height: number } };
     try {
       const meta = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS }).metadata();
@@ -44,26 +40,12 @@ export class UploadsService {
         .resize({ width: MAX_EDGE_PX, height: MAX_EDGE_PX, fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 82 })
         .toBuffer({ resolveWithObject: true });
-    } catch (error) {
-      this.logger.debug(`Rejected upload: ${error instanceof Error ? error.message : error}`);
+    } catch {
+      this.logger.debug('Rejected invalid image upload.');
       throw new BadRequestException('Tệp không phải ảnh hợp lệ. Hỗ trợ JPEG, PNG, WebP, GIF và AVIF.');
     }
 
-    const hash = createHash('sha256').update(output.data).digest('hex').slice(0, 32);
-    const shard = hash.slice(0, 2);
-    const directory = path.join(this.rootDir, shard);
-    await mkdir(directory, { recursive: true });
-    try {
-      await writeFile(path.join(directory, `${hash}.webp`), output.data, { flag: 'wx' });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-    }
-
-    return {
-      url: `${this.publicBase}/${shard}/${hash}.webp`,
-      width: output.info.width,
-      height: output.info.height,
-      bytes: output.data.length,
-    };
+    if (output.data.length > 10 * 1024 * 1024) throw new BadRequestException('Ảnh sau xử lý vượt quá dung lượng cho phép.');
+    return this.storage.store(owner, output.data, output.info.width, output.info.height);
   }
 }

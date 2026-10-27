@@ -58,6 +58,10 @@ export const QUERY_KEYS = {
     list: (username: string, viewer: string) => ["journeys", "list", username, viewer] as const,
     byId: (id: string, viewer: string) => ["journeys", "detail", id, viewer] as const,
   },
+  media: {
+    all: ["media"] as const,
+    image: (viewer: string | null, session: number, source: string) => ["media", viewer, session, source] as const,
+  },
   visitedLocations: {
     all: ["visited-locations"] as const,
     mine: (viewer: string, filters: object = {}) => ["visited-locations", "mine", viewer, filters] as const,

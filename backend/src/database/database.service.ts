@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client, ClientConfig, Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { databaseConnectionOptions } from './connection-options';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
@@ -10,17 +11,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   constructor(config: ConfigService) {
     this.connectionConfig = {
-      connectionString: config.getOrThrow<string>('DATABASE_URL'),
+      ...databaseConnectionOptions(config.getOrThrow<string>('DATABASE_URL'), config.get<string>('PGSSLMODE', ''), config.get<string>('NODE_ENV') === 'production'),
       connectionTimeoutMillis: 5_000,
       application_name: 'wandermap-api',
-      ssl: config.get<string>('PGSSLMODE') === 'require' ? { rejectUnauthorized: true } : undefined,
     };
     this.pool = new Pool({
       ...this.connectionConfig,
       max: config.get<number>('DB_POOL_MAX', 10),
       idleTimeoutMillis: 30_000,
     });
-    this.pool.on('error', (error) => this.logger.error('Unexpected idle PostgreSQL client error', error.stack));
+    this.pool.on('error', () => this.logger.error('Unexpected idle PostgreSQL client error; verify database availability.'));
   }
 
   async onModuleInit() {

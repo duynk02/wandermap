@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
+import { validateFrontendEnvironment } from "./src/lib/config/environment.mjs";
 
 // Full API base URL incl. /api/v1 (server-side only). Used for SSR calls and as the proxy target.
 // NOTE: rewrite destinations are resolved at build time, so set this before `next build`.
-const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? "http://localhost:4000/api/v1";
+const { api: API_INTERNAL_URL } = validateFrontendEnvironment(process.env);
 const API_ORIGIN = API_INTERNAL_URL.replace(/\/api\/v1\/?$/, "");
 
 const nextConfig: NextConfig = {
@@ -36,6 +37,15 @@ const nextConfig: NextConfig = {
   // Security headers
   async headers() {
     return [
+      {
+        source: "/api/v1/:path*",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store, max-age=0" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+          { key: "Vercel-CDN-Cache-Control", value: "no-store" },
+          { key: "x-vercel-enable-rewrite-caching", value: "0" },
+        ],
+      },
       {
         source: "/(.*)",
         headers: [

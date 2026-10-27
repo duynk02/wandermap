@@ -1,0 +1,58 @@
+{
+  "001_initial_schema.sql": {
+    "canonical": "4a56f755f2262ae770d4cb258b04e320e4a3f0754b0993ea3be5981326c23c25",
+    "windows": "2cbef2d1225e2def6566554e8b75b6d2d92bd23db73f873935c5a50ec9eb43ac"
+  },
+  "002_accent_insensitive_search.sql": {
+    "canonical": "0f2674cfb5bafe6564dafe77b74810faa5597ff40cd9ff944c0221b540087751",
+    "windows": "d17280a3f6cb3baed8c53da02d7298e154761746649e5b3d7c106e7ad1e97bee"
+  },
+  "003_comments.sql": {
+    "canonical": "4c6d4e4ef1bc8ce6ce690bca86ad1f90918733848adc9d512c4baa8531edf7ba",
+    "windows": "1683d49d6701e6abc30ab7e15d4124710127f56d792dcb2885f057381fce50d8"
+  },
+  "004_notifications.sql": {
+    "canonical": "12a6492101a6991ed6851ca372800b43a333e2df65cd79fb481a470927c189d1",
+    "windows": "a4cf6816c067430431a7c0b12451313783d16f51501a3ba7d108a0cb66767b92"
+  },
+  "005_comment_edit.sql": {
+    "canonical": "a9577d816f0cd83973110d44305abbd521114bc78505973782c495340c52be35",
+    "windows": "16d9d895e1e305843c37fc5f7e90a892dbb9cbfb94ea0c621531c66500763b87"
+  },
+  "006_profile_editing.sql": {
+    "canonical": "276721c0fb13a6055a387e2de924c0bd0c56a1a8cc002959827edec96d339f76",
+    "windows": "b3195d5e6a9794ed82329d194bb27612e2f44d363a6f5b194980964b82dac77d"
+  },
+  "007_travel_map_journeys.sql": {
+    "canonical": "578529024a06cbba16d4e6315ca7ea20a5338b7d51c2b4fd8e95df49ee1c12d1",
+    "windows": "2e1a5b1fec5cafcae9742421c2f3479655131c57ff88be0af980712688625d43"
+  },
+  "008_visited_locations_cutover.sql": {
+    "canonical": "9dd68e795b5f49925b761a1b5c9f46cc8a85ec73f299e0f2aaaf6ded7f11ea75",
+    "windows": "ae13b0ae5e3cf1ba04681142b15746d33b904151ff536bdf378df9668d4d27f0"
+  },
+  "009_journey_posts.sql": {
+    "canonical": "580983f33d2c0cb9803ae38b93fee2c3ae7cfe21f2fa3ca8f65953a30e4311b1",
+    "windows": "d2ede798968f87b3ccddc6fef2a80dd084a9547b5ce74a4e3efdfe38de9d3a3c"
+  },
+  "010_notifications_realtime.sql": {
+    "canonical": "b3f0913e4dfcbb20d173bc9622184ae9c04ac2c9631c2a392ec132c45777156d",
+    "windows": "f4bc6bc71c056c5bcfbccd1e9e801a5d41a7980292d0ca5b68fcf0271c6519cb"
+  },
+  "011_comment_request_id.sql": {
+    "canonical": "2bff4994f01b77678543b32b08490184089c12fdd7891f19589a6e6bd50bdc75",
+    "windows": "f826599822aa647c5602c3e26473dfeb65f3a0a7048e1d315ebc25c8c7fb3cb1"
+  },
+  "012_comment_interaction_notifications.sql": {
+    "canonical": "9cc09831e1203dc71396de976ebb906fb332c6a14e89099b10d4c267dca5e453",
+    "windows": "137e2b2b612688bfdfa2ec7be210e910df88d15dcf1ce49e433bdb0f573f9978"
+  },
+  "013_conversations_messages.sql": {
+    "canonical": "59dbf52b2060808a1ce8d44dd695c48ed63ef1a10795064ea0be6a052206fb77",
+    "windows": "27cb36c9ff7b8638ac79363790e7e98de5631595a540f77a1177e227f61e0f1e"
+  },
+  "014_messaging_blocks.sql": {
+    "canonical": "caecb250cbcf5062a0feae58ef36feb9a0f47d7005664fb05e6ef0d790f2d719",
+    "windows": "4522bbdd34b03cd8d0d3f2ccab7e68753820309fbcb0202e5c5f22fcfb879ac3"
+  }
+}

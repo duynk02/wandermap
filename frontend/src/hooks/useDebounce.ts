@@ -1,14 +1,14 @@
 import { useCallback, useRef } from "react";
 
 // Returns a debounced version of the callback
-export function useDebounce<T extends (...args: any[]) => any>(
-  fn: T,
+export function useDebounce<Args extends unknown[]>(
+  fn: (...args: Args) => unknown,
   delay: number
-): (...args: Parameters<T>) => void {
+): (...args: Args) => void {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   return useCallback(
-    (...args: Parameters<T>) => {
+    (...args: Args) => {
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => fn(...args), delay);
     },

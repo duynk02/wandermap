@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { normalizeVietnamese } from '../common/text';
 import { LocationsService } from '../locations/locations.service';
@@ -7,6 +8,20 @@ import { PhotonFeature, PlacesService } from './places.service';
 const feature = (props: NonNullable<PhotonFeature['properties']>, lng = 106, lat = 16): PhotonFeature => ({
   geometry: { coordinates: [lng, lat] },
   properties: { osm_type: 'N', countrycode: 'VN', country: 'Việt Nam', ...props },
+});
+
+describe('PlacesService upstream failure', () => {
+  it('keeps existing search results available without logging upstream content or user queries', async () => {
+    const existing = [{ name: 'Đà Lạt', google_place_id: null, coordinates: { lat: 12, lng: 108 } }];
+    const locations = { suggest: jest.fn().mockResolvedValue(existing) } as unknown as LocationsService;
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('private query and provider response'));
+    const log = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      const service = new PlacesService(new ConfigService(), locations);
+      await expect(service.search({ q: 'private query', scope: 'vn', limit: 8 })).resolves.toEqual({ existing, external: [], externalAvailable: false });
+      expect(JSON.stringify(log.mock.calls)).not.toMatch(/private query|provider response/);
+    } finally { fetchMock.mockRestore(); log.mockRestore(); }
+  });
 });
 
 describe('normalizeVietnamese', () => {

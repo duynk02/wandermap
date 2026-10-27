@@ -13,13 +13,14 @@ import { createMessagingSync } from "@/lib/realtime/messaging";
 import { getConversationMessage } from "@/lib/api/messaging";
 import { useAuthStore } from "@/stores/authStore";
 import { useRealtimeStore } from "@/stores/realtimeStore";
+import { realtimeUrl } from "@/lib/config/environment.mjs";
 
 /** Mounted once by AuthProvider, so all pages share one socket for the current session. */
 export function useRealtimeConnection() {
   const queryClient = useQueryClient();
 
   useEffect(() => realtimeSession.acquire(queryClient, () => {
-    const origin = process.env.NEXT_PUBLIC_REALTIME_URL ?? "http://localhost:4000";
+    const origin = realtimeUrl(process.env.NEXT_PUBLIC_REALTIME_URL, process.env.NODE_ENV === "production");
     const messaging = createMessagingSync({ client: queryClient, keys: QUERY_KEYS.messaging,
       getUserId: () => useAuthStore.getState().user?.id ?? null,
       loadMessage: (conversation, message, signal) => getConversationMessage(conversation, message, signal),
@@ -62,6 +63,8 @@ export function useRealtimeConnection() {
       queryClient.removeQueries({ queryKey: QUERY_KEYS.notifications.all });
       void queryClient.cancelQueries({ queryKey: QUERY_KEYS.messaging.all });
       queryClient.removeQueries({ queryKey: QUERY_KEYS.messaging.all });
+      void queryClient.cancelQueries({ queryKey: QUERY_KEYS.media.all });
+      queryClient.removeQueries({ queryKey: QUERY_KEYS.media.all });
     });
     lifecycle.setUser(useAuthStore.getState().user?.id ?? null);
     const stopResume = observeBrowserResume(() => {

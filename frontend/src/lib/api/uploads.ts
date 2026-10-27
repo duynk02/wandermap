@@ -1,7 +1,7 @@
 import { apiFetch } from "./client";
 
 export interface UploadedImage {
-  /** Absolute, public URL to store on the post. */
+  /** Stable managed API URL; image bytes require resource authorization. */
   url: string;
   width: number;
   height: number;

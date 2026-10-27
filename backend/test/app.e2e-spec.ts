@@ -1,7 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
-import { AppModule } from '../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
 import { NotificationsListener } from '../src/notifications/notifications.listener';
 
@@ -20,6 +19,9 @@ describe('WanderMap API health (e2e)', () => {
       COOKIE_SECURE: 'false',
       COOKIE_SAME_SITE: 'lax',
     });
+
+    // Configure fixtures before ConfigModule validates; never read application .env in tests.
+    const { AppModule } = await import('../src/app.module');
 
     const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(DatabaseService)

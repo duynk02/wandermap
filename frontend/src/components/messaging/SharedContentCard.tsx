@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -103,8 +104,8 @@ export function SharedContentCard({
     <>
       {image && brokenImage !== image && (
         <div className="aspect-[16/9] overflow-hidden bg-surface-muted">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+
+          <MediaImage
             src={image}
             alt=""
             width={360}

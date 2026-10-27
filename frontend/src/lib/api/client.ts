@@ -11,6 +11,8 @@
  * they only ever see public data.
  */
 
+import { serverApiUrl, browserApiUrl } from "../config/environment.mjs";
+
 export type SessionChange = "signed-in" | "signed-out";
 const sessionListeners = new Set<(change: SessionChange) => void>();
 let sessionChannel: BroadcastChannel | null = null;
@@ -56,8 +58,8 @@ const isServer = () => typeof window === "undefined";
 /** Browser: NEXT_PUBLIC_API_URL (default "/api/v1", proxied by next.config.ts). Server: direct. */
 export function apiBaseUrl(): string {
   return isServer()
-    ? (process.env.API_INTERNAL_URL ?? "http://localhost:4000/api/v1")
-    : (process.env.NEXT_PUBLIC_API_URL ?? "/api/v1");
+    ? serverApiUrl(process.env.API_INTERNAL_URL, process.env.NODE_ENV === "production")
+    : browserApiUrl(process.env.NEXT_PUBLIC_API_URL, process.env.NODE_ENV === "production");
 }
 
 // ── Access token (memory only) ───────────────────────────────────────────────
@@ -197,6 +199,8 @@ export interface RequestOptions {
   /** Set false for /auth/* calls: no 401 → refresh → retry loop. */
   retryOnUnauthorized?: boolean;
   signal?: AbortSignal;
+  /** Binary media still uses the same bearer/refresh/session safeguards. */
+  responseType?: "json" | "blob";
 }
 
 function buildUrl(path: string, query?: RequestOptions["query"]): string {
@@ -235,7 +239,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
 
   const send = () => {
-    const headers: Record<string, string> = { Accept: "application/json" };
+    const headers: Record<string, string> = { Accept: options.responseType === "blob" ? "image/webp" : "application/json" };
     if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
     return fetch(buildUrl(path, query), {
@@ -243,7 +247,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       headers,
       body: body === undefined ? undefined :isForm ? (body as FormData) : JSON.stringify(body),
       credentials: "include",
-      cache: isServer() ? "no-store" : undefined,
+      cache: isServer() || options.responseType === "blob" ? "no-store" : undefined,
       signal: signal ?? (path.startsWith("/auth/") ? AbortSignal.timeout(15_000) : undefined),
     });
   };
@@ -261,6 +265,13 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
 
   if (!res.ok) throw await toApiError(res);
+  if (options.responseType === "blob") {
+    if (requestSessionVersion !== sessionVersion) throw new ApiError(401, "AUTH_SESSION_CHANGED", "Phiên đăng nhập đã thay đổi.");
+    const blob = await res.blob();
+    signal?.throwIfAborted();
+    if (requestSessionVersion !== sessionVersion) throw new ApiError(401, "AUTH_SESSION_CHANGED", "Phiên đăng nhập đã thay đổi.");
+    return blob as T;
+  }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }

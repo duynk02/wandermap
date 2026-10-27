@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -401,8 +402,8 @@ export function JourneyShareDialog({
                   )}
                   {preview && (
                     <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+
+                      <MediaImage
                         src={preview}
                         alt={`Preview ${journey.title}`}
                         onLoad={() => setLoadedPreview(preview)}

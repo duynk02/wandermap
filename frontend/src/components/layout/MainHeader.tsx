@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Compass, Home, MessageCircle, PlusSquare } from "lucide-react";
@@ -72,8 +73,8 @@ export function MainHeader() {
               />
               {profile && (
                 <Link href={ROUTES.profile(profile.username)} aria-label="Hồ sơ cá nhân" className="ml-1 shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+
+                  <MediaImage
                     src={getAvatarUrl(profile.avatar_url, profile.username)}
                     alt=""
                     className="h-8 w-8 rounded-full object-cover"

@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import { useState } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -24,8 +25,8 @@ export function JourneyPostContent({ post }: { post: JourneyPost }) {
             aria-label="Phóng to ảnh hành trình"
             className="block w-full bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+
+            <MediaImage
               src={getPostImageUrl(image)}
               alt={`Ảnh hành trình ${journey.title}`}
               loading="lazy"
@@ -43,8 +44,8 @@ export function JourneyPostContent({ post }: { post: JourneyPost }) {
                   Ảnh tại thời điểm chia sẻ. Mở hành trình để xem tuyến cập
                   nhật.
                 </Dialog.Description>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+
+                <MediaImage
                   src={getPostImageUrl(image)}
                   alt={`Ảnh hành trình ${journey.title}`}
                   className="max-h-full max-w-full object-contain"

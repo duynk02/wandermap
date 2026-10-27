@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Send, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -52,8 +53,8 @@ export function CommentComposer({ postId, replyTo, onCancelReply, onSubmit, isSu
 
   return (
     <div className="flex gap-2.5">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+
+      <MediaImage
         src={profile ? getAvatarUrl(profile.avatar_url, profile.username) : getAvatarUrl(null, "guest")}
         alt=""
         className="mt-0.5 h-8 w-8 shrink-0 rounded-full object-cover"

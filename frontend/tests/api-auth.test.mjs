@@ -357,3 +357,39 @@ test("HTTP 401 replay keeps the comment idempotency key and request body unchang
   assert.equal(bodies[0], bodies[1]);
   assert.equal(JSON.parse(bodies[1]).client_request_id, input.client_request_id);
 });
+
+test("private media uses bearer headers, no-store and the shared one-shot refresh", async () => {
+  globalThis.window = {};
+  setAccessToken("expired-media-fixture");
+  const calls = [];
+  let refreshes = 0;
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url.includes("expired-media-fixture"), false);
+    if (url.endsWith("/auth/refresh")) { refreshes++; return Response.json({ accessToken: "fresh-media-fixture" }); }
+    calls.push(options);
+    return calls.length === 1 ? new Response(null, { status: 401 }) : new Response("webp", { headers: { "content-type": "image/webp" } });
+  };
+  const blob = await apiFetch("/media/asset-id", { responseType: "blob" });
+  assert.equal(await blob.text(), "webp");
+  assert.equal(refreshes, 1);
+  assert.equal(calls[1].headers.Authorization, "Bearer fresh-media-fixture");
+  assert.equal(calls[1].cache, "no-store");
+});
+
+test("a media body finishing after account replacement cannot return old private bytes", async () => {
+  globalThis.window = {};
+  setAccessToken("account-a");
+  let finish;
+  let bodyStarted;
+  const started = new Promise((resolve) => { bodyStarted = resolve; });
+  globalThis.fetch = async () => ({ ok: true, status: 200, blob: async () => {
+    bodyStarted();
+    return new Promise((resolve) => { finish = () => resolve(new Blob(["account-a-private-bytes"])); });
+  } });
+  const pending = apiFetch("/media/asset-id", { responseType: "blob" });
+  const rejected = assert.rejects(pending, { code: "AUTH_SESSION_CHANGED" });
+  await started;
+  setAccessToken("account-b");
+  finish();
+  await rejected;
+});

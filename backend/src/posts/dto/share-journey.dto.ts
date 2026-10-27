@@ -1,5 +1,6 @@
 import { IsInt, IsString, IsUrl, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsManagedMediaUrl } from '../../uploads/managed-media-url';
 
 export class ShareJourneyDto {
   @ApiProperty()
@@ -20,5 +21,6 @@ export class ShareJourneyDto {
   @ApiProperty({ maxLength: 2048 })
   @IsUrl({ protocols: ['http', 'https'], require_protocol: true, require_tld: false })
   @MaxLength(2048)
+  @IsManagedMediaUrl()
   preview_image_url!: string;
 }
