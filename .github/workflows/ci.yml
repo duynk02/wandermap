@@ -1,0 +1,94 @@
+name: WanderMap CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_API_URL: /api/v1
+      # Build-only fixtures, never provider/production integration credentials.
+      API_INTERNAL_URL: https://api.example.test/api/v1
+      NEXT_PUBLIC_REALTIME_URL: https://api.example.test
+      NEXT_PUBLIC_MAPBOX_TOKEN: pk.ci-build-fixture-no-provider-access
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm audit
+      - run: npm audit --omit=dev
+      - run: npm run lint -- --max-warnings=0
+      - run: npm run type-check
+      - run: npm test
+      - run: npm run build
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5
+        env:
+          POSTGRES_USER: wandermap_ci
+          POSTGRES_PASSWORD: ci-isolated-test-only
+          POSTGRES_DB: wandermap_ci_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U wandermap_ci -d wandermap_ci_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NODE_ENV: test
+      WANDERMAP_TEST_DATABASE_URL: postgresql://wandermap_ci:ci-isolated-test-only@127.0.0.1:5432/wandermap_ci_test
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --include=dev
+      - run: npm audit
+      - run: npm audit --omit=dev
+      - run: npm run lint
+      - run: npm run type-check
+      - run: npm test -- --runInBand
+      - run: npm run test:transport
+      - run: npm run build
+      - run: npm run test:e2e -- --runInBand
+      - run: npm run test:db:ci
+      - name: Verify canonical migrations on fresh test schema
+        env:
+          DATABASE_URL: postgresql://wandermap_ci:ci-isolated-test-only@127.0.0.1:5432/wandermap_ci_test
+        run: |
+          npm run db:migrate:prod
+          npm run db:migrate:prod
+          npm run db:migrate:prod -- --status
+      - run: npm run test:startup
+      - name: Build non-root production image with SQL artifacts
+        run: docker build -t wandermap-ci:${{ github.sha }} .
