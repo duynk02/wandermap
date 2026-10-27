@@ -1,0 +1,6 @@
+*
+!release-worker.Dockerfile
+!verify-artifact.cjs
+!inspect-production.cjs
+!runtime-inspect.sh
+!record-worker.cjs

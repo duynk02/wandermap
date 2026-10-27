@@ -1,0 +1,47 @@
+{
+  "workerImageId": "sha256:2c922743183258df0fb974df6bf3681069c4528249d9fc65677d56a241c9d704",
+  "applicationRelease": "818d5f88c2169ca5dc3e5f59e90888c1bcf2d20a",
+  "operationalVersion": "ops-v2",
+  "platform": "linux/amd64",
+  "runtimeUser": "node",
+  "baseImage": "node@sha256:63538dfe497cc29dfafdda25ada09b46db68a3f4cc205abf1f5d6bf0913f3384",
+  "runtimeVerified": true,
+  "cleanReleaseWorkerVerified": true,
+  "offlineReadOnlyNoNetworkVerification": "PASS",
+  "npmCi": "PASS",
+  "typeCheck": "PASS",
+  "transportTests": 3,
+  "artifactUnitTests": 2,
+  "backendProductionBuild": "PASS",
+  "canonicalMigrations": 16,
+  "productionInspection": "NOT_AUTHORIZED_NOT_RUN",
+  "productionBackup": "NOT_AUTHORIZED_NOT_RUN",
+  "migrationRunner": "NOT_AUTHORIZED_NOT_RUN",
+  "renderDatabasePlan": "Free (user confirmed)",
+  "helpers": [
+    {
+      "name": "verify-artifact.cjs",
+      "sha256": "06f7246ef240679404c2dba3ec47a65109c8eda96d67e1fb95d01a2b23cfc807"
+    },
+    {
+      "name": "inspect-production.cjs",
+      "sha256": "367fe944cc0ac26d58e4c10205f2687fd05218be215313208f8219ba70a510ae"
+    },
+    {
+      "name": "record-worker.cjs",
+      "sha256": "4ef2d8acefc50fed6a74f4f3a7f9e358acde8a3d02e24e8f460c26fbd406ce37"
+    },
+    {
+      "name": "runtime-inspect.sh",
+      "sha256": "577c6af3de9c09844e5bd16fc052933dc5734223af0217283480faeb38b65802"
+    },
+    {
+      "name": "release-worker.Dockerfile",
+      "sha256": "af4e189f1f0ed0a93c1a039b8e7125cc7bfcc22b4e5398efceb676c28501bd02"
+    },
+    {
+      "name": ".dockerignore",
+      "sha256": "675023d7f0f9b5806a11636771372f12d4ee8e846988c9fbf8168b221129a8cb"
+    }
+  ]
+}
