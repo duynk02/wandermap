@@ -95,6 +95,47 @@ describeDatabase('Journey posts: real HTTP, PostgreSQL/PostGIS, triggers and con
     await request(http()).get(`/api/v1/posts/by-location/${locations[0]}`).expect(200).expect(({ body: page }) => expect(page.data.map((p: { id: string }) => p.id)).toEqual(expect.arrayContaining([legacyPost, created.body.id])));
   });
 
+  it('requires active authentication and validates pagination/filters for own visit post sources', async () => {
+    const route = `/api/v1/posts/mine/by-location/${locations[0]}`;
+    await request(http()).get(route).expect(401);
+    await request(http()).get(route).set('Authorization', token(inactive)).expect(401);
+    await request(http()).get('/api/v1/posts/mine/by-location/not-a-uuid').set('Authorization', token()).expect(400);
+    for (const query of [{ page: 0 }, { pageSize: 51 }, { author_id: other }]) {
+      await request(http()).get(route).query(query).set('Authorization', token()).expect(400);
+    }
+    await request(http()).get(`/api/v1/posts/mine/by-location/${randomUUID()}`).set('Authorization', token()).expect(200)
+      .expect(({ body }) => expect(body).toMatchObject({ data: [], count: 0, hasMore: false }));
+  });
+
+  it('paginates only own posts at the exact location, includes private sources, and never creates a visit', async () => {
+    const location = randomUUID(), elsewhere = randomUUID();
+    for (const id of [location, elsewhere]) await pool.query(`INSERT INTO locations (id, name, coordinates)
+      VALUES ($1, 'Nguồn kỷ niệm', ST_SetSRID(ST_MakePoint(108, 16), 4326))`, [id]);
+    const mine = [randomUUID(), randomUUID(), randomUUID()];
+    for (const [index, visibility] of ['public', 'followers', 'private'].entries()) {
+      await pool.query(`INSERT INTO posts (id, author_id, location_id, content, rating, visited_at, visibility, created_at)
+        VALUES ($1, $2, $3, $4, 5, '2024-02-29', $5, $6)`, [mine[index], owner, location, `Kỷ niệm ${visibility}`, visibility, `2026-01-0${index + 1}T00:00:00Z`]);
+    }
+    await pool.query(`INSERT INTO posts (author_id, location_id, content, rating, visited_at, visibility)
+      VALUES ($1, $2, 'Bài của người khác', 4, '2026-02-03', 'public'),
+             ($1, $2, 'Bài riêng của người khác', 4, '2026-02-04', 'private'),
+             ($3, $4, 'Một địa điểm khác', 4, '2026-02-05', 'private')`, [other, location, owner, elsewhere]);
+    const route = `/api/v1/posts/mine/by-location/${location}`;
+    const first = await request(http()).get(route).query({ pageSize: 2 }).set('Authorization', token()).expect(200);
+    expect(first.headers['cache-control']).toContain('no-store');
+    expect(first.body).toMatchObject({ count: 3, page: 1, pageSize: 2, hasMore: true });
+    expect(first.body.data.map((post: { id: string }) => post.id)).toEqual([mine[2], mine[1]]);
+    expect(first.body.data[0]).toMatchObject({ author_id: owner, location_id: location, visibility: 'private', content: 'Kỷ niệm private', visited_at: '2024-02-29' });
+    expect(first.body.data[0]).not.toHaveProperty('images');
+    const second = await request(http()).get(route).query({ page: 2, pageSize: 2 }).set('Authorization', token()).expect(200);
+    expect(second.body.data.map((post: { id: string }) => post.id)).toEqual([mine[0]]);
+    expect(second.body.hasMore).toBe(false);
+    const otherSources = await request(http()).get(route).set('Authorization', token(other)).expect(200);
+    expect(otherSources.body.count).toBe(2);
+    expect(otherSources.body.data.every((post: { author_id: string }) => post.author_id === other)).toBe(true);
+    expect((await pool.query('SELECT count(*)::int AS n FROM user_visited_locations WHERE location_id=$1', [location])).rows[0].n).toBe(0);
+  });
+
   it('requires active authentication, ownership and valid preview/revision DTOs', async () => {
     const journey = await create();
     await request(http()).post('/api/v1/posts/journey').send({}).expect(401);

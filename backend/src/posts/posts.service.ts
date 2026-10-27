@@ -24,6 +24,18 @@ const POST_FIELDS = `p.id, p.author_id, p.location_id, p.content, p.images, p.ra
 export class PostsService {
   constructor(private readonly db: DatabaseService) {}
 
+  async mineByLocation(userId: string, locationId: string, query: SavedPostQueryDto) {
+    const { page, pageSize } = query;
+    const where = "p.author_id = $1 AND p.location_id = $2 AND p.post_type = 'location' AND u.is_active = true";
+    const [data, count] = await Promise.all([
+      this.db.query(`SELECT p.id, p.author_id, p.location_id, p.content, p.visited_at::text AS visited_at, p.visibility, p.created_at
+        FROM posts p JOIN users u ON u.id = p.author_id WHERE ${where}
+        ORDER BY p.created_at DESC, p.id DESC LIMIT $3 OFFSET $4`, [userId, locationId, pageSize, (page - 1) * pageSize]),
+      this.db.query<{ count: string }>(`SELECT COUNT(*)::text AS count FROM posts p JOIN users u ON u.id = p.author_id WHERE ${where}`, [userId, locationId]),
+    ]);
+    return this.paginated(data.rows, Number(count.rows[0]?.count ?? 0), page, pageSize);
+  }
+
   async saved(userId: string, query: SavedPostQueryDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 12;

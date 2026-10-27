@@ -1,5 +1,5 @@
 import { DEFAULT_PAGE_SIZE } from "@/constants";
-import type { FeedFilters, PaginatedResponse, Post } from "@/types";
+import type { FeedFilters, PaginatedResponse, Post, VisitPostSource } from "@/types";
 import type { CreatePostInput } from "@/lib/validations";
 import { ApiError, apiFetch } from "./client";
 import type { JourneyPost } from "@/types";
@@ -29,6 +29,13 @@ export const getSavedPosts = (page = 1, signal?: AbortSignal) =>
 export const getPostsByLocation = (locationId: string, page = 1) =>
   apiFetch<PaginatedResponse<Post>>(`/posts/by-location/${encodeURIComponent(locationId)}`, {
     query: { page, pageSize: DEFAULT_PAGE_SIZE },
+  });
+
+/** Authenticated owner-only sources, filtered and paginated by the server. */
+export const getMyPostsByLocation = (locationId: string, page = 1, signal?: AbortSignal) =>
+  apiFetch<PaginatedResponse<VisitPostSource>>(`/posts/mine/by-location/${encodeURIComponent(locationId)}`, {
+    query: { page, pageSize: DEFAULT_PAGE_SIZE },
+    signal,
   });
 
 export const getPostsByAuthor = (username: string, page = 1) =>

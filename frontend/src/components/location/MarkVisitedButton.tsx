@@ -36,6 +36,7 @@ import { QUERY_KEYS } from "@/constants";
 import { cn } from "@/lib/utils";
 import type { Location, PaginatedResponse, VisitedLocation } from "@/types";
 import { VisitHistory } from "./visited/VisitHistory";
+import { VisitPostPicker } from "./visited/VisitPostPicker";
 import {
   assertTravelSession,
   fieldClass,
@@ -393,6 +394,11 @@ function VisitedEditor({
             }
           })}
         >
+          {!mark && <VisitPostPicker locationId={location.id} viewer={viewer} disabled={blocked} onApply={(values) => {
+            form.setValue("visited_at", values.visited_at, { shouldDirty: true, shouldValidate: true });
+            form.setValue("note", values.note, { shouldDirty: true, shouldValidate: true });
+            form.clearErrors("root");
+          }} />}
           {!mark && (
             <div>
               <label
@@ -533,6 +539,7 @@ function VisitedEditor({
           <div className="mt-6">
             <VisitHistory
               markId={mark.id}
+              locationId={location.id}
               viewer={viewer}
               disabled={pending}
               onChanged={sync}

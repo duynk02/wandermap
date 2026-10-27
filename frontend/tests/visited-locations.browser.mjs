@@ -41,12 +41,14 @@ try {
   await new Promise((done, reject) => { socket.addEventListener("open", done, { once: true }); socket.addEventListener("error", reject, { once: true }); });
   let sequence = 0;
   let failNextWrite = false;
+  let failPostSources = false;
   const pending = new Map();
   socket.addEventListener("message", ({ data }) => {
     const message = JSON.parse(data);
     if (message.method === "Fetch.requestPaused") {
-      const shouldFail = failNextWrite && message.params.request.method === "PATCH";
-      if (shouldFail) failNextWrite = false;
+      const failedWrite = failNextWrite && message.params.request.method === "PATCH";
+      const shouldFail = failedWrite || (failPostSources && message.params.request.url.includes('/posts/mine/by-location/'));
+      if (failedWrite) failNextWrite = false;
       void send(shouldFail ? "Fetch.failRequest" : "Fetch.continueRequest", {
         requestId: message.params.requestId,
         ...(shouldFail ? { errorReason: "Failed" } : {}),
@@ -73,8 +75,9 @@ try {
     return result.result.value;
   };
   const waitFor = (expression, label) => until(() => evaluate(expression), label);
-  const click = (label) => evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(b => !b.disabled && b.textContent.trim() === ${JSON.stringify(label)}); if (!button) throw new Error('Missing button: ' + ${JSON.stringify(label)}); button.focus(); button.click(); })()`);
+  const click = (label) => evaluate(`(() => { const root = [...document.querySelectorAll('[role=dialog]')].filter(d => d.dataset.state !== 'closed').at(-1) ?? document; const button = [...root.querySelectorAll('button')].find(b => !b.disabled && b.textContent.trim() === ${JSON.stringify(label)}); if (!button) throw new Error('Missing button: ' + ${JSON.stringify(label)}); button.focus(); button.click(); })()`);
   const fill = async (selector, value) => {
+    await waitFor(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); return !!el && !el.disabled; })()`, `field ready: ${selector}`);
     const date = await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) throw new Error('Missing field'); el.focus(); if(el.type !== 'date') el.select(); return el.type === 'date'; })()`);
     if (date) await evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(value)}); el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); })()`);
     else await send("Input.insertText", { text: value });
@@ -104,6 +107,13 @@ try {
   const location = await call("/locations", { name: "Đà Lạt · Một miền ký ức", city: "Đà Lạt", country: "Việt Nam", category: "mountain", coordinates: { lat: 11.9404, lng: 108.4583 } }, "POST", session.accessToken);
   const locationId = location.id;
   assert.ok(locationId, "Location creation returns an ID");
+  for (let index = 0; index < 13; index++) await call('/posts', {
+    location_id: locationId, content: `Kỷ niệm tham khảo số ${index}`, images: [], rating: 4, visited_at: '2025-03-04', visibility: 'public',
+  }, 'POST', session.accessToken);
+  const importedContent = 'Kỷ niệm riêng tư ở Đà Lạt. '.repeat(50);
+  await call('/posts', { location_id: locationId, content: importedContent, images: [], rating: 5, visited_at: '2024-02-29', visibility: 'private' }, 'POST', session.accessToken);
+  const outsider = await call('/auth/register', { email: `outside_${suffix}@example.test`, password: `Test-only-${randomUUID()}`, username: `outside_${suffix}`, display_name: 'Một người khác' });
+  await call('/posts', { location_id: locationId, content: 'Bài của người khác không được lấy làm nguồn', images: [], rating: 4, visited_at: '2025-03-04', visibility: 'public' }, 'POST', outsider.accessToken);
 
   // Exercise real parallel requests through the application's pg pool/owner locks.
   const repeatLocation = await call("/locations", { name: "Điểm kiểm thử gửi lại", coordinates: { lat: 10, lng: 106 } }, "POST", session.accessToken);
@@ -129,6 +139,31 @@ try {
   await waitFor("!!document.querySelector('#marked-note')", "new mark editor");
   assert.equal(await evaluate("document.querySelector('input[value=private]').checked"), true);
   assert.equal(await evaluate("document.querySelector('#marked-visit-date').value"), "");
+  await fill('#marked-note', 'Nội dung đang nhập');
+  failPostSources = true;
+  await send('Fetch.enable', { patterns: [{ urlPattern: '*posts/mine/by-location/*' }] });
+  await click('Lấy thông tin từ bài đăng');
+  await waitFor("document.body.innerText.includes('Không thể tải bài đăng')", 'source error does not block manual entry');
+  assert.equal(await evaluate("document.querySelector('#marked-note').value"), 'Nội dung đang nhập');
+  failPostSources = false;
+  await click('Thử tải lại');
+  await waitFor("[...document.querySelectorAll('button')].some(b => b.textContent.includes('Kỷ niệm riêng tư ở Đà Lạt'))", 'own private post source');
+  assert.equal(await evaluate("document.querySelector('[role=dialog]').innerText.includes('Bài của người khác không được lấy làm nguồn')"), false);
+  assert.equal(await evaluate("document.querySelector('#marked-note').value"), 'Nội dung đang nhập', 'loading/refetch must not overwrite a draft');
+  await click('Xem thêm bài đăng');
+  await waitFor("document.body.innerText.includes('Kỷ niệm tham khảo số 0')", 'source pagination reaches old posts');
+  await capture("visited-post-picker-desktop.png");
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  assert.ok(await evaluate("(() => { const r=document.querySelector('[role=dialog]').getBoundingClientRect(); return r.x >= 0 && r.right <= innerWidth && r.height <= innerHeight; })()"), "Post picker fits the mobile dialog");
+  await capture("visited-post-picker-mobile.png");
+  await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false });
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent.includes('Kỷ niệm riêng tư ở Đà Lạt')).click()");
+  assert.equal(await evaluate("document.querySelector('#marked-visit-date').value"), '2024-02-29');
+  assert.equal(await evaluate("document.querySelector('#marked-note').value"), importedContent.trim().slice(0, 1000));
+  assert.equal(await evaluate("document.querySelector('input[value=private]').checked"), true);
+  assert.equal(await evaluate("document.body.innerText.includes('1.000 ký tự đầu')"), true);
+  assert.equal((await call(`/users/me/visited-locations?location_id=${locationId}`, undefined, "GET", session.accessToken)).count, 0, "Choosing a post must not save a mark automatically");
+  checks.push('owner-only paginated post sources include private posts; selected travel date/text fill editable fields; no automatic overwrite; truncation notice; visibility preserved');
   await fill("#marked-visit-date", "2026-06-12");
   await fill("#marked-note", "Buổi sáng se lạnh, một ly cà phê và lời hẹn quay lại.");
   await capture("visited-create-desktop.png");
@@ -147,17 +182,25 @@ try {
   await openEditor();
   await waitFor("[...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Thêm lần đến' && !b.disabled)", "visit history loaded");
   await click("Thêm lần đến");
+  await click('Lấy thông tin từ bài đăng');
+  await waitFor("[...document.querySelectorAll('button')].some(b => b.textContent.includes('Kỷ niệm riêng tư ở Đà Lạt'))", 'repeat visit source picker');
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent.includes('Kỷ niệm riêng tư ở Đà Lạt')).click()");
+  assert.equal(await evaluate("document.querySelector('#visit-date').value"), '2024-02-29');
+  assert.equal(await evaluate("document.querySelector('#visit-note').value"), importedContent.trim().slice(0, 1000));
   await fill("#visit-date", "2026-07-20");
   await fill("#visit-note", "Quay lại cùng những người bạn.");
   await click("Lưu lần ghé thăm");
   await waitFor("!document.querySelector('#visit-date') && document.body.innerText.includes('20/07/2026')", "repeat visit saved");
+  await waitFor("!!document.querySelector('button[aria-label=\"Sửa lần ghé thăm 20/07/2026\"]:not(:disabled)')", "visit save finished before editing");
   await evaluate("document.querySelector('button[aria-label=\"Sửa lần ghé thăm 20/07/2026\"]').click()");
+  await waitFor("!!document.querySelector('#visit-date:not(:disabled)')", "visit edit form ready");
   await fill("#visit-date", "2026-07-21");
   await click("Lưu lần ghé thăm");
   await waitFor("!document.querySelector('#visit-date') && document.body.innerText.includes('21/07/2026')", "visit date edited");
   checks.push("add and edit repeat visits");
 
   await fill("#marked-note", "Chưa lưu");
+  await waitFor("[...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Lưu thay đổi' && !b.disabled)", "metadata draft registered before closing");
   await evaluate("document.querySelector('button[aria-label=\"Đóng quản lý địa điểm đã đến\"]').click()");
   await waitFor("document.body.innerText.includes('Bạn còn thay đổi chưa lưu')", "unsaved warning");
   await click("Quay lại");
@@ -207,17 +250,29 @@ try {
   assert.equal((await call(`/users/me/visited-locations?location_id=${locationId}`, undefined, "GET", session.accessToken)).count, 0);
   assert.equal((await call(`/users/${credentials.username}/visited-locations`, undefined, "GET")).count, 0);
   checks.push("confirmed deletion removes visit/mark and invalidates status");
+  await send("Page.navigate", { url: `${web}/location/${repeatLocation.id}` });
+  await waitFor("[...document.querySelectorAll('button')].some(b => b.textContent.includes('Đã ghé thăm') && !b.disabled)", "place with no post sources");
+  await evaluate("[...document.querySelectorAll('button')].find(b => b.textContent.includes('Đã ghé thăm')).click()");
+  await waitFor("[...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Thêm lần đến' && !b.disabled)", "empty source visit history");
+  await click("Thêm lần đến");
+  await click("Lấy thông tin từ bài đăng");
+  await waitFor("document.body.innerText.includes('Bạn chưa có bài đăng tại địa điểm này')", "empty post source feedback");
+  assert.equal(await evaluate("document.querySelector('#visit-date').disabled"), false);
+  assert.equal(await evaluate("document.querySelector('#visit-note').disabled"), false);
+  checks.push("empty sources leave manual visit entry available");
   assert.deepEqual(runtimeErrors, [], "No uncaught browser runtime exceptions");
   console.log(JSON.stringify({ checks, artifacts }, null, 2));
 } catch (error) {
+  console.error(error.message);
   await diagnose?.();
   throw error;
 } finally {
+  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ id: 2147483647, method: "Browser.close" }));
   socket?.close();
-  chrome.kill();
-  await pause(500);
+  for (let attempt = 0; attempt < 20 && chrome.exitCode === null; attempt++) await pause(250);
+  if (chrome.exitCode === null) chrome.kill();
   // Only remove the fresh temporary browser profile created by this script.
   assert.equal(dirname(resolve(profile)), resolve(tmpdir()));
   assert.ok(basename(profile).startsWith("wandermap-step2-browser-"));
-  await rm(profile, { recursive: true, force: true, maxRetries: 4, retryDelay: 300 });
+  await rm(profile, { recursive: true, force: true, maxRetries: 6, retryDelay: 300 }).catch((error) => console.warn(`Temporary browser profile cleanup: ${error.code}`));
 }

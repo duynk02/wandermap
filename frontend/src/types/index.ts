@@ -114,6 +114,9 @@ export interface JourneyPost extends PostBase {
 
 export type Post = LocationPost | JourneyPost;
 
+/** Own location posts offered as visit form sources; no images or other viewers' posts. */
+export type VisitPostSource = Pick<LocationPost, "id" | "author_id" | "location_id" | "content" | "visited_at" | "visibility" | "created_at">;
+
 export interface Itinerary {
   id: string;
   author_id: string;

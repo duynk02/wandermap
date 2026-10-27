@@ -76,6 +76,7 @@ export const QUERY_KEYS = {
   },
   posts: {
     all: ["posts"] as const,
+    mineByLocation: (viewer: string, locationId: string, session: number) => ["posts", "mine", viewer, "location", locationId, session] as const,
     saved: (viewer: string) => ["posts", "saved", viewer] as const,
     byJourney: (id: string, viewer: string) => ["posts", "journey", id, viewer] as const,
     feed: (filters: object) => ["posts", "feed", filters] as const,
