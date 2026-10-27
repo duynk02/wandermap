@@ -21,15 +21,23 @@ export async function login(input: LoginInput): Promise<CurrentUser> {
   });
 }
 
-export async function register(input: RegisterInput): Promise<CurrentUser> {
-  return runAuthTransition(async (commitToken) => {
-    const res = await apiFetch<AuthResponse>("/auth/register", {
+/** Registration finishes on the login page, without publishing an authenticated viewer. */
+export async function register(input: RegisterInput): Promise<{ sessionCleared: boolean }> {
+  return runAuthTransition(async () => {
+    await apiFetch<AuthResponse>("/auth/register", {
       method: "POST",
       body: input,
       retryOnUnauthorized: false,
     });
-    commitToken(res.accessToken);
-    return res.user;
+    // The existing backend creates a refresh session on registration. Clear it under
+    // the same cookie lock so refreshes/other tabs cannot race the handoff to login.
+    try {
+      await apiFetch("/auth/logout", { method: "POST", retryOnUnauthorized: false });
+      return { sessionCleared: true };
+    } catch {
+      // The account already exists: do not report a failed registration or resubmit it.
+      return { sessionCleared: false };
+    }
   });
 }
 

@@ -62,8 +62,8 @@ async function inspect() {
     assert.equal(identity.schema, 'public');
     assert.ok(identity.version >= 160000 && identity.version < 170000, 'Review non-PG16 target separately.');
     assert.ok(identity.can_connect && identity.can_create && identity.can_use);
-    const tls = (await client.query('SELECT ssl, version FROM pg_stat_ssl WHERE pid = pg_backend_pid()')).rows[0];
-    assert.equal(tls.ssl, true);
+    const sslSession = (await client.query('SELECT ssl, version FROM pg_stat_ssl WHERE pid = pg_backend_pid()')).rows[0];
+    assert.equal(sslSession.ssl, true);
     stage = 'extensions';
     const extensions = (await client.query(`SELECT e.extname AS name, e.extversion AS version, n.nspname AS schema
       FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
