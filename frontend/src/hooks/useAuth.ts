@@ -19,7 +19,9 @@ export async function signIn(input: LoginInput) {
 }
 
 export async function signUp(input: RegisterInput) {
-  applyUser(await authApi.register(input));
+  const result = await authApi.register(input);
+  useAuthStore.getState().reset();
+  return result;
 }
 
 export async function signOut() {

@@ -1,0 +1,103 @@
+{
+  "result": "PASS",
+  "applicationRelease": "818d5f88c2169ca5dc3e5f59e90888c1bcf2d20a",
+  "releaseTree": "3a8e0e2c461a9a79449c900ed9c921ab4048fe1f",
+  "node": "v22.23.4",
+  "npm": "10.9.9",
+  "platform": "linux",
+  "arch": "x64",
+  "baseImage": "node@sha256:63538dfe497cc29dfafdda25ada09b46db68a3f4cc205abf1f5d6bf0913f3384",
+  "checkoutClean": true,
+  "credentialsPresent": false,
+  "migrations": [
+    {
+      "name": "001_initial_schema.sql",
+      "checksum": "4a56f755f2262ae770d4cb258b04e320e4a3f0754b0993ea3be5981326c23c25"
+    },
+    {
+      "name": "002_accent_insensitive_search.sql",
+      "checksum": "0f2674cfb5bafe6564dafe77b74810faa5597ff40cd9ff944c0221b540087751"
+    },
+    {
+      "name": "003_comments.sql",
+      "checksum": "4c6d4e4ef1bc8ce6ce690bca86ad1f90918733848adc9d512c4baa8531edf7ba"
+    },
+    {
+      "name": "004_notifications.sql",
+      "checksum": "12a6492101a6991ed6851ca372800b43a333e2df65cd79fb481a470927c189d1"
+    },
+    {
+      "name": "005_comment_edit.sql",
+      "checksum": "a9577d816f0cd83973110d44305abbd521114bc78505973782c495340c52be35"
+    },
+    {
+      "name": "006_profile_editing.sql",
+      "checksum": "276721c0fb13a6055a387e2de924c0bd0c56a1a8cc002959827edec96d339f76"
+    },
+    {
+      "name": "007_travel_map_journeys.sql",
+      "checksum": "578529024a06cbba16d4e6315ca7ea20a5338b7d51c2b4fd8e95df49ee1c12d1"
+    },
+    {
+      "name": "008_visited_locations_cutover.sql",
+      "checksum": "9dd68e795b5f49925b761a1b5c9f46cc8a85ec73f299e0f2aaaf6ded7f11ea75"
+    },
+    {
+      "name": "009_journey_posts.sql",
+      "checksum": "580983f33d2c0cb9803ae38b93fee2c3ae7cfe21f2fa3ca8f65953a30e4311b1"
+    },
+    {
+      "name": "010_notifications_realtime.sql",
+      "checksum": "b3f0913e4dfcbb20d173bc9622184ae9c04ac2c9631c2a392ec132c45777156d"
+    },
+    {
+      "name": "011_comment_request_id.sql",
+      "checksum": "2bff4994f01b77678543b32b08490184089c12fdd7891f19589a6e6bd50bdc75"
+    },
+    {
+      "name": "012_comment_interaction_notifications.sql",
+      "checksum": "9cc09831e1203dc71396de976ebb906fb332c6a14e89099b10d4c267dca5e453"
+    },
+    {
+      "name": "013_conversations_messages.sql",
+      "checksum": "59dbf52b2060808a1ce8d44dd695c48ed63ef1a10795064ea0be6a052206fb77"
+    },
+    {
+      "name": "014_messaging_blocks.sql",
+      "checksum": "caecb250cbcf5062a0feae58ef36feb9a0f47d7005664fb05e6ef0d790f2d719"
+    },
+    {
+      "name": "015_fix_location_search_normalization.sql",
+      "checksum": "5924b3f529f0f321b3040162b166c055e8810017fc1c98ca194ca39e32f1a284"
+    },
+    {
+      "name": "016_managed_media.sql",
+      "checksum": "779db1fe74df3279d74d8c46b457da856e58d907e55ff14ad8d62819d21644d8"
+    }
+  ],
+  "helpers": [
+    {
+      "name": "verify-artifact.cjs",
+      "sha256": "06f7246ef240679404c2dba3ec47a65109c8eda96d67e1fb95d01a2b23cfc807"
+    },
+    {
+      "name": "inspect-production.cjs",
+      "sha256": "367fe944cc0ac26d58e4c10205f2687fd05218be215313208f8219ba70a510ae"
+    },
+    {
+      "name": "runtime-inspect.sh",
+      "sha256": "577c6af3de9c09844e5bd16fc052933dc5734223af0217283480faeb38b65802"
+    },
+    {
+      "name": "record-worker.cjs",
+      "sha256": "4ef2d8acefc50fed6a74f4f3a7f9e358acde8a3d02e24e8f460c26fbd406ce37"
+    }
+  ],
+  "manifestSha256": "54b55d66d7ef1220128d237cdcdd3ac8d955d143809ceee8b37b9dd37aac25ac",
+  "lockfileSha256": "bf400af771b44b375a488b0b9ee61172f40cce4410de6af6b0845e9dfdad05b1",
+  "compiledFileCount": 308,
+  "compiledInventorySha256": "4b2460157aa0f0546eaabec18af56f13285d55cfe812dc2cf1cadcbb3368c552",
+  "productionDatabaseInspected": false,
+  "productionBackupExecuted": false,
+  "migrationRunnerExecuted": false
+}

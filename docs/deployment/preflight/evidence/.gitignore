@@ -1,0 +1,2 @@
+# Compiled operator build is retained locally; commit provenance JSON/hashes, not binary artifacts.
+backend-release.tar
