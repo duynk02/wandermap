@@ -243,6 +243,8 @@ SQL migration ở `src/database/migrations/` là append-only. Runner dùng Postg
 
 Nếu messaging báo `relation "conversation_participants" does not exist`, kiểm tra `npm run db:migrate:status` rồi chạy `npm run db:migrate` từ `backend/`; database ứng dụng cần cả migrations 013 và 014. Khởi động backend và chờ health trả thành công trước khi mở frontend để tránh proxy `ECONNREFUSED` trong lúc API chưa lắng nghe.
 
+Nếu upload ảnh/avatar ở local báo PostgreSQL `42P01`, kiểm tra database đã có migration 016 (`media_assets`) chưa. Backup database local trước, kiểm tra `npm run db:migrate:status` rồi chạy `npm run db:migrate` từ `backend/` với đúng `DATABASE_URL` local; runner áp dụng các migration còn thiếu theo thứ tự, bao gồm 015 trước 016.
+
 Một số migration được cố định LF trong `.gitattributes` để giữ nguyên SHA-256 khi checkout trên Windows. Nếu runner báo checksum khác, đối chiếu bytes với bản đã áp dụng; chỉ khôi phục line endings khi đã xác minh nội dung khớp checksum cũ. Không cập nhật checksum trong `schema_migrations` để bỏ qua thay đổi SQL.
 
 `docker compose down` giữ dữ liệu trong volume. Chỉ dùng `docker compose down -v` khi chắc chắn muốn xóa hoàn toàn database local.

@@ -14,7 +14,13 @@ export function SearchPin() {
   if (!pin) return null;
 
   return (
-    <Marker longitude={pin.longitude} latitude={pin.latitude} anchor="bottom" style={{ zIndex: 10 }}>
+    <Marker
+      longitude={pin.longitude}
+      latitude={pin.latitude}
+      anchor="bottom"
+      // Keep the text card out of Mapbox's persistent transform layer during zoom.
+      style={{ zIndex: 10, willChange: "auto" }}
+    >
       <div className="flex flex-col items-center">
         <div className="mb-2 w-[280px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-3 text-ink shadow-xl">
           <div className="flex items-start gap-2">
