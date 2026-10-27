@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, LogLevel, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import {NestExpressApplication} from '@nestjs/platform-express';
@@ -11,10 +11,13 @@ import { AppModule } from './app.module';
 import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 import {UploadsService} from './uploads/uploads.service';
 import { RealtimeIoAdapter } from './realtime/realtime-io.adapter';
+import { applyProxyPolicy } from './config/proxy-policy';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true});
   const config = app.get(ConfigService);
+  app.useLogger(config.get<string>('LOG_LEVEL', 'log,warn,error').split(',') as LogLevel[]);
+  applyProxyPolicy(app, config);
   app.useWebSocketAdapter(new RealtimeIoAdapter(app, config));
   app.enableShutdownHooks();
   const origins = config.get<string>('CORS_ORIGINS', 'http://localhost:3000')
@@ -33,6 +36,11 @@ async function bootstrap() {
     const requestId = typeof incoming === 'string' && /^[a-zA-Z0-9._-]{1,100}$/.test(incoming) ? incoming : randomUUID();
     request.requestId = requestId;
     response.setHeader('x-request-id', requestId);
+    if (request.path.startsWith('/api/v1/')) {
+      response.setHeader('Cache-Control', 'private, no-store, max-age=0');
+      response.setHeader('CDN-Cache-Control', 'no-store');
+      response.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+    }
     next();
   });
   app.enableCors({
@@ -50,7 +58,7 @@ async function bootstrap() {
 
 // Uploaded images. Files are named by content hash, so they can be cached forever. helmet defaults to
 // Cross-Origin-Resource-Policy: same-origin, which would block <img> tags on the web app's origin.
-app.useStaticAssets(app.get(UploadsService).rootDir, {
+if (config.get<string>('SERVE_LEGACY_UPLOADS', 'true') === 'true' && config.get<string>('NODE_ENV') !== 'production') app.useStaticAssets(app.get(UploadsService).rootDir, {
   prefix: '/uploads',
   index: false,
   dotfiles: 'deny',
@@ -73,22 +81,24 @@ app.useStaticAssets(app.get(UploadsService).rootDir, {
   }));
   app.useGlobalFilters(new ApiExceptionFilter());
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('WanderMap API')
-    .setDescription('REST API for the WanderMap travel discovery and social application.')
-    .setVersion('1.0.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, { jsonDocumentUrl: 'docs-json', swaggerOptions: { persistAuthorization: true } });
+  if (config.get<string>('SWAGGER_ENABLED') === 'true') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('WanderMap API')
+      .setDescription('REST API for the WanderMap travel discovery and social application.')
+      .setVersion('1.0.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document, { jsonDocumentUrl: 'docs-json', swaggerOptions: { persistAuthorization: false } });
+  }
 
   const port = config.get<number>('PORT', 4000);
   await app.listen(port, '0.0.0.0');
-  console.log(`WanderMap API listening on http://localhost:${port}/api/v1`);
-  console.log(`Swagger UI available at http://localhost:${port}/docs`);
+  new Logger('Bootstrap').log(`WanderMap API listening on port ${port}; REST /api/v1, Socket.IO /realtime.`);
 }
 
 bootstrap().catch((error: unknown) => {
-  console.error('Failed to start WanderMap API:', error instanceof Error ? error.message : error);
+  console.error(error instanceof Error && error.message.startsWith('Invalid environment configuration:')
+    ? error.message : 'Failed to start WanderMap API. Check database availability and deployment configuration.');
   process.exit(1);
 });

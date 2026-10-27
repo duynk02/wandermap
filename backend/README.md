@@ -38,7 +38,7 @@ quy Phase 3 Notifications. Xem [kết quả, security review và cách chạy l�
 
 ## Yêu cầu
 
-- Node.js 20.19+ (khuyến nghị Node.js 22 LTS)
+- Node.js 22.23.4 hoặc patch 22.x mới hơn đã kiểm chứng (`.node-version` ở root).
 - npm
 - Docker + Docker Compose nếu muốn chạy PostgreSQL/PostGIS bằng cấu hình local đi kèm
 
@@ -95,9 +95,9 @@ npm run lint
 npm run build
 ```
 
-### Chạy API bằng npm ở repository root
+### Thư mục chạy lệnh
 
-Để thuận tiện, repository gốc có các script `api:dev`, `api:build`, `api:test`, `api:type-check` và `api:db:migrate`. Các lệnh đó chuyển tiếp đến `backend/`; dependency frontend và backend vẫn được cài độc lập.
+Chạy các lệnh API trực tiếp trong `backend/`; repository root không có package.json. Frontend và backend cài dependency độc lập bằng npm ci.
 
 ## Environment variables
 
@@ -136,7 +136,7 @@ Ví dụ đăng ký (email/password):
 - `POST /auth/login` — xác thực email/password.
 - `POST /auth/refresh` — xoay refresh token, đọc token từ HttpOnly cookie.
 - `POST /auth/logout` — revoke refresh session.
-- `GET /auth/me` — profile của access token hiện tại.
+- `GET /users/me` — profile của access token hiện tại (`/auth/me` đang comment).
 
 Password được hash bằng bcrypt. Access token JWT có thời hạn ngắn; refresh token ngẫu nhiên chỉ lưu hash trong database, được đặt vào cookie `HttpOnly`, `SameSite=Lax` mặc định, `Secure` trong production. Với frontend/API khác site, cần `COOKIE_SAME_SITE=none`, HTTPS và `COOKIE_SECURE=true`; origin vẫn được kiểm tra theo allowlist. API bảo vệ route bằng guard và kiểm tra user còn active. Google OAuth chưa được chuyển đổi; cần triển khai riêng và cấu hình provider trước khi bật đăng nhập Google trên frontend.
 
@@ -235,8 +235,9 @@ Xem [tài liệu kiến trúc](../docs/phase-2-architecture.md) trước khi dù
 
 Kiểm thử migration/constraints trên DB PostGIS thử nghiệm: đặt
 `WANDERMAP_TEST_DATABASE_URL`, chạy `npm run test:db` trong backend/.
-Suite không đọc DATABASE_URL ứng dụng; tạo schema tạm trong transaction rồi
-rollback toàn bộ. Thiếu biến test URL thì suite được skip. Không cần dependency mới.
+Suites không đọc DATABASE_URL ứng dụng; dùng schema/fixtures riêng trong disposable DB.
+Một số suite commit để test locks/realtime thật, nên không dùng database có dữ liệu quan trọng.
+Thiếu URL thì local suites skip; CI dùng `test:db:ci` và từ chối skipped tests.
 
 SQL migration ở `src/database/migrations/` là append-only. Runner dùng PostgreSQL advisory lock, chạy mỗi migration trong transaction và lưu SHA-256 checksum trong `schema_migrations`. Nếu file migration đã áp dụng bị sửa, runner dừng để tránh drift; hãy tạo migration mới thay vì chỉnh migration cũ.
 
@@ -250,14 +251,20 @@ Một số migration được cố định LF trong `.gitattributes` để giữ
 
 Schema mới đã thay quan hệ `profiles.id -> auth.users.id` bằng bảng `users` do ứng dụng quản lý; các policy dựa vào `auth.uid()` được thay bằng guards và checks ở backend. Không chạy migration cũ trực tiếp lên database mới.
 
-Chưa thực hiện copy dữ liệu thật từ Supabase. Trước khi chuyển production cần backup, xuất/import dữ liệu theo dependency, giữ nguyên UUID cho profiles/posts/follows/likes/saves/pins/itineraries, kiểm tra số lượng hàng và các quan hệ, đồng thời chọn chiến lược cho credentials. Không giả định hash password của Supabase có thể dùng lại an toàn nếu chưa kiểm tra tương thích; có thể yêu cầu password reset hoặc migration auth có kiểm soát.
+Quyết định production hiện tại: database mới trống; không chuyển dữ liệu hoặc credentials development/Supabase. Mọi kế hoạch import trong tương lai là công việc riêng, cần backup/mapping/authorization, không thuộc Mốc A.
 
 ## Known follow-up work
 
-- Kết nối Next.js API client và gỡ Supabase khỏi từng frontend feature (chưa thực hiện).
+- Frontend hiện dùng NestJS API; không có Supabase runtime cho các tính năng mới.
 - Chuyển Google OAuth và các email flows nếu cần.
-- Chuyển dữ liệu ảnh khỏi Supabase Storage hoặc giữ nguyên storage hiện hữu trong giai đoạn chuyển tiếp; backend hiện lưu URL ảnh chứ chưa triển khai upload service.
-- Bổ sung integration/e2e tests thực thi trên PostgreSQL + PostGIS thật. Hiện có unit tests cho env validation, truy vấn viewport/PostGIS và một số quy tắc truy cập/idempotency ở posts, cùng một e2e test cho health route (mock DB). Chưa có integration test chạy truy vấn trên PostgreSQL/PostGIS thật; chưa chạy được suite trong môi trường tạo mã này vì không tải được npm dependencies.
+- Upload mới dùng managed assets: local private provider khi development, Cloudinary authenticated ở production; giữ Sharp/WebP/metadata stripping. Canonical URLs không chứa signed provider URLs. Legacy images không được tự migrate.
+- PostGIS integration suites hiện có và chạy trên disposable test DB; `npm run test:db:ci` chặn missing config/skipped tests. Không xem health e2e mock DB là integration đầy đủ.
 - Thêm job scheduler cho `refresh_trending_scores()` nếu cần tự động cập nhật trending.
 - Thiết lập CSRF policy phù hợp với domain/cookie khi deploy frontend và API khác site.
-- Hoàn thiện quy trình import dữ liệu và chạy thử trên backup staging.
+- Kiểm chứng Cloudinary/Render/Vercel/Mapbox thật trong private Mốc B; chưa gọi các tích hợp này là PASS từ local tests.
+
+## Production hardening Mốc A
+
+Xem [Deployment guide](../docs/deployment/DEPLOYMENT_GUIDE.md), [Environment inventory](../docs/deployment/ENVIRONMENT_VARIABLES.md) và [Media security](../docs/deployment/MEDIA_SECURITY.md). Migration 015 sửa location search/backfill, 016 thêm asset ownership. Build đóng gói SQL đã verify vào `dist/database/migrations`; production trống dùng `npm run db:migrate:prod`, development DB cũ dùng source runner và giữ checksum/bytes lịch sử. Không tự normalize 001–014 hoặc sửa schema_migrations.
+
+Swagger production mặc định disabled; LOG_LEVEL được validate/apply. REST/media có no-store, cookies vẫn rotating HttpOnly và access JWT chỉ memory. Cấu hình proxy chỉ nhận explicit trusted CIDRs, không trust tất cả forwarded headers.

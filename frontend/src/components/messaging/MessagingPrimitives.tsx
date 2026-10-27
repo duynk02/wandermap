@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import type { ReactNode } from "react";
 import { Compass } from "lucide-react";
 import { cn, getAvatarUrl } from "@/lib/utils";
@@ -13,8 +14,7 @@ export function MessagingAvatar({
   className?: string;
 }) {
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <MediaImage
       src={getAvatarUrl(profile.avatar_url, profile.username)}
       alt=""
       width={44}

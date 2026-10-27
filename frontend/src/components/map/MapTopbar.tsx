@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Search, MapPin, PlusCircle, User, Loader2, X, Newspaper, MessageCircle } from "lucide-react";
@@ -137,7 +138,6 @@ export function MapTopbar() {
             }}
             placeholder="Tìm địa điểm, thành phố..."
             aria-label="Tìm kiếm địa điểm"
-            aria-expanded={isOpen && input.trim().length >= 2}
             className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-subtle"
           />
 
@@ -348,7 +348,7 @@ export function MapTopbar() {
               aria-label="Hồ sơ cá nhân"
               className="h-10 w-10 overflow-hidden rounded-2xl shadow-lg ring-2 ring-white"
             >
-              <img
+              <MediaImage
                 src={profile?.avatar_url ?? "/icons/default-avatar.svg"}
                 alt={profile?.display_name ?? "Ảnh đại diện"}
                 className="h-full w-full object-cover"

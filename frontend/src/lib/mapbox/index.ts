@@ -65,9 +65,10 @@ export async function geocodeSearch(query: string): Promise<GeocodingResult[]> {
   const res = await fetch(url);
   if (!res.ok) throw new Error("Geocoding request failed");
 
-  const data = await res.json();
+  const data = (await res.json()) as { features: { id: string; text: string; place_name: string;
+    center: [number, number]; context?: { id: string; text: string }[]; place_type?: string[] }[] };
 
-  return data.features.map((feature: any) => {
+  return data.features.map((feature) => {
     const context: { id: string; text: string }[] = feature.context ?? [];
     const fromContext = (prefix: string) =>
       context.find((c) => String(c.id).startsWith(prefix))?.text;

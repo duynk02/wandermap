@@ -5,6 +5,8 @@ import { Throttle } from '@nestjs/throttler';
 import { memoryStorage } from 'multer';
 import { AccessTokenGuard } from '../common/guards/access-token.guard';
 import { UploadsService } from './uploads.service';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../common/interfaces';
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
@@ -20,8 +22,8 @@ export class UploadsController {
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } }, required: ['file'] } })
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } }))
-  upload(@UploadedFile() file?: Express.Multer.File) {
+  upload(@CurrentUser() user: AuthenticatedUser, @UploadedFile() file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('Thiếu tệp ảnh (trường "file").');
-    return this.uploads.saveImage(file.buffer);
+    return this.uploads.saveImage(file.buffer, user.sub);
   }
 }

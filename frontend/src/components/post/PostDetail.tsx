@@ -1,3 +1,4 @@
+import { MediaImage } from "@/components/ui/MediaImage";
 import Link from "next/link";
 import { ArrowLeft, Calendar, Star } from "lucide-react";
 import { LOCATION_CATEGORIES, ROUTES } from "@/constants";
@@ -16,8 +17,7 @@ const VISIBILITY_LABEL: Record<string, string> = {
  * Presentational post view (no hooks), so it renders both from the server page and from the
  * client fallback used for non-public posts.
  *
- * Plain <img> on purpose: post images are arbitrary https URLs, which next/image would
- * reject unless every host is listed in next.config.ts `remotePatterns`.
+ * Managed images use authorized delivery; the wrapper also supports legacy public URLs.
  */
 export function PostDetail({ post }: { post: Post }) {
   if (post.post_type === "journey") return (
@@ -58,8 +58,8 @@ export function PostDetail({ post }: { post: Post }) {
                         : "aspect-square"
                   )}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt={`Ảnh ${i + 1}`} className="h-full w-full object-cover" />
+
+                  <MediaImage src={src} alt={`Ảnh ${i + 1}`} className="h-full w-full object-cover" />
                 </div>
               ))}
             </div>
@@ -68,8 +68,8 @@ export function PostDetail({ post }: { post: Post }) {
           <div className="p-6">
             {author && (
               <Link href={ROUTES.profile(author.username)} className="mb-4 flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+
+                <MediaImage
                   src={getAvatarUrl(author.avatar_url, author.username)}
                   alt={author.display_name}
                   className="h-10 w-10 rounded-2xl object-cover"

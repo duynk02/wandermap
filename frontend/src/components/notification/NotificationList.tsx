@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -39,8 +40,8 @@ function NotificationRow({ item, onNavigate, onRead }: { item: NotificationItem;
         )}
       >
         <span className="relative shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+
+          <MediaImage
             src={getAvatarUrl(actor?.avatar_url ?? null, actor?.username ?? "user")}
             alt=""
             className="h-11 w-11 rounded-full object-cover"
@@ -59,8 +60,7 @@ function NotificationRow({ item, onNavigate, onRead }: { item: NotificationItem;
         </span>
 
         {item.post?.image && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.post.image} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
+          <MediaImage src={item.post.image} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
         )}
       </Link>
     </li>

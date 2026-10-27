@@ -1,17 +1,18 @@
-import 'dotenv/config';
+import { config as loadLocalEnvironment } from 'dotenv';
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Client } from 'pg';
+import { databaseConnectionOptions } from './connection-options';
 
 async function main() {
+  if (!['production', 'test'].includes(process.env.NODE_ENV ?? '')) loadLocalEnvironment();
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error('DATABASE_URL is required. Copy .env.example to .env and configure it first.');
 
   const client = new Client({
-    connectionString: databaseUrl,
+    ...databaseConnectionOptions(databaseUrl, process.env.PGSSLMODE, process.env.NODE_ENV === 'production'),
     application_name: 'wandermap-migrations',
-    ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: true } : undefined,
     connectionTimeoutMillis: 10_000,
   });
   await client.connect();
@@ -26,7 +27,7 @@ async function main() {
       )
     `);
 
-    const dir = path.resolve(process.cwd(), 'src/database/migrations');
+    const dir = path.join(__dirname, 'migrations');
     const files = (await readdir(dir)).filter((name) => /^\d+_[a-z0-9_-]+\.sql$/i.test(name)).sort();
     if (files.length === 0) throw new Error(`No SQL migrations found in ${dir}`);
     const applied = await client.query<{ name: string; checksum: string }>('SELECT name, checksum FROM schema_migrations');

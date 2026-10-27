@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -334,8 +335,8 @@ export function EditProfileDialog({
             <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain px-6 py-5">
               <div>
                 <div className="flex flex-wrap items-center gap-4">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+
+                  <MediaImage
                     src={avatarSrc}
                     alt="Xem trước ảnh đại diện"
                     onError={() => {

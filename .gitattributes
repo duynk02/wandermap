@@ -7,3 +7,5 @@ backend/src/database/migrations/010_notifications_realtime.sql text eol=lf
 backend/src/database/migrations/012_comment_interaction_notifications.sql text eol=lf
 backend/src/database/migrations/013_conversations_messages.sql text eol=lf
 backend/src/database/migrations/014_messaging_blocks.sql text eol=lf
+backend/src/database/migrations/015_fix_location_search_normalization.sql text eol=lf
+backend/src/database/migrations/016_managed_media.sql text eol=lf

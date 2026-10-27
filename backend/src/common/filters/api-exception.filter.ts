@@ -27,7 +27,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
       if (dbError?.code === '23505') { status = HttpStatus.CONFLICT; code = 'DUPLICATE_RESOURCE'; message = 'A resource with these details already exists.'; }
       else if (dbError?.code === '23503') { status = HttpStatus.BAD_REQUEST; code = 'INVALID_REFERENCE'; message = 'A referenced resource does not exist or cannot be deleted.'; }
       else if (dbError?.code === '23514' || dbError?.code === '23502' || dbError?.code === '22P02' || dbError?.code === '22007' || dbError?.code === '22001') { status = HttpStatus.BAD_REQUEST; code = 'INVALID_DATA'; message = 'The provided data is invalid.'; }
-      else this.logger.error(`Unhandled exception for ${request.method} ${request.url}`, exception instanceof Error ? exception.stack : String(exception));
+      else this.logger.error(`Unexpected server error for request ${request.requestId ?? 'unavailable'}; code ${typeof dbError?.code === 'string' && /^[A-Z0-9]{5}$/.test(dbError.code) ? dbError.code : 'INTERNAL'}.`);
     }
 
     response.status(status).json({

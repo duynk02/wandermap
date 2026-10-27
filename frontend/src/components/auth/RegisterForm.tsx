@@ -36,7 +36,7 @@ export function RegisterForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div>
         <input {...register("display_name")} placeholder="Tên hiển thị" autoComplete="name" className={inputClass} />
         {errors.display_name && <p className="mt-1 text-xs text-red-500">{errors.display_name.message}</p>}

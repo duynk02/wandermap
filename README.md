@@ -27,7 +27,7 @@ WanderMap phát triển quanh ba trải nghiệm:
 
 **Kiến trúc hiện tại:** `frontend/` (Next.js) giao tiếp với `backend/` (NestJS REST API); backend sử dụng PostgreSQL + PostGIS.
 
-**Tiến độ hiện tại:** Phase 1 đã được xác nhận hoàn tất; Phase 2 đã có My Travel Map/Journey Builder MVP và xuất ảnh PNG. Phần tiếp theo là chia sẻ Journey lên Feed, sau đó tới realtime notifications và nhắn tin. Xem hướng dẫn Phase 2 bên dưới.
+**Tiến độ hiện tại:** mã nguồn có Phase 1–4, gồm Profile, Travel Map/Journey/export/share, realtime notifications và Messaging. Mốc A bổ sung production hardening, authenticated Cloudinary media và CI; kết quả local/CI/cloud được tách riêng trong [Production Readiness](docs/deployment/PRODUCTION_READINESS.md). Chưa thực hiện deployment cloud.
 
 ## Công nghệ sử dụng
 
@@ -41,7 +41,7 @@ WanderMap phát triển quanh ba trải nghiệm:
 | Database | PostgreSQL 16 + PostGIS (`postgis/postgis:16-3.5` trong Docker Compose) |
 | Truy cập database | `pg`, parameterized SQL, SQL migrations (không sử dụng ORM) |
 | Authentication | Email/password, JWT access token, rotating refresh token qua HttpOnly cookie |
-| Upload ảnh | API NestJS; xử lý bằng `sharp`, lưu trên ổ đĩa backend trong bản hiện tại |
+| Upload ảnh | Sharp/WebP và managed media; local private provider development, Cloudinary authenticated production |
 | API documentation | Swagger UI |
 
 > Các phiên bản trên căn cứ `package.json` và Docker Compose
@@ -127,7 +127,7 @@ Frontend gọi API qua `frontend/src/lib/api/client.ts`, hỗ trợ xử lý acc
 
 ### 1. Yêu cầu
 
-- **Node.js >= 20.19**, khuyến nghị Node.js 22 LTS.
+- **Node.js 22.23.4** hoặc patch 22.x mới hơn đã kiểm chứng; xem `.node-version` và engines từng app.
 - npm.
 - Docker Desktop/Engine và Docker Compose để chạy PostgreSQL + PostGIS (hoặc tự cấu hình PostgreSQL/PostGIS tương thích).
 - Mapbox public access token (`pk...`).
@@ -225,15 +225,15 @@ Next.js lưu output development trong `frontend/.next-dev/`, còn `npm run build
 
 | Nhóm | Đã có trong mã nguồn | Cần hoàn thiện / lưu ý |
 |---|---|---|
-| Xác thực | Register, login, refresh, logout, `/auth/me` | Google OAuth backend chưa có; kiểm tra flows triển khai thực tế |
+| Xác thực | Register, login, refresh, logout, `/users/me` | Google OAuth backend chưa có |
 | Bản đồ & địa điểm | Mapbox map, marker/clustering, viewport, trending, location detail, tìm địa điểm qua Photon | Kiểm tra độ chính xác dữ liệu, tối ưu tìm kiếm và giao diện |
-| Bài đăng | Tạo/xem/sửa/xóa bài, ảnh, rating, gắn location, feed công khai/following | Image Lightbox chưa thấy trong ZIP |
+| Bài đăng | Tạo/xem/sửa/xóa bài, ảnh/lightbox, rating, gắn location, feed công khai/following | Cần smoke test browser/cloud theo release checklist |
 | Tương tác xã hội | Follow/unfollow, like/unlike, save/unsave, tab Đã lưu trong hồ sơ, bình luận và replies | Danh sách đã lưu riêng tư, chỉ giữ bài còn quyền xem |
 | Profile | Trang hồ sơ, chỉ số, bản đồ cá nhân; `PATCH /users/me` hỗ trợ tên, avatar URL và bio | Form chỉnh sửa đầy đủ, cover, username, website còn là kế hoạch |
-| Travel map & Journey | Visited/wishlist, lịch sử ghé thăm; bản đồ Profile/bộ lọc/thống kê; Journey Builder nháp/công khai; xuất poster PNG 1:1 và 4:5 | Journey Post và Travel Passport chưa có |
+| Travel map & Journey | Visited/wishlist, lịch sử ghé thăm; Journey Builder/detail/export PNG và share lên Feed/chat | Travel Passport chưa có |
 | Itineraries | Backend có API itinerary và itinerary stops | Không đồng nghĩa đã có trình dựng hành trình drag-and-drop trên frontend |
 | Notifications | Follow, thích/bình luận bài viết, thích/trả lời bình luận; Socket.IO sau commit; REST danh sách/unread/đánh dấu nhóm hoặc tất cả; đồng bộ nhiều tab | REST là nguồn dữ liệu chuẩn; fallback polling khi realtime không sẵn sàng, chưa có replay bền vững |
-| Upload ảnh | API `POST /uploads/images` và xử lý ảnh WebP | Lưu local disk; cần kế hoạch storage bền vững khi deploy nhiều instance |
+| Upload ảnh | `POST /uploads/images`, `GET /media/:id`, Sharp/WebP, authorization theo resource và no-store | Real Cloudinary integration cần verify ở Mốc B |
 
 ### Trang / luồng chính
 
@@ -256,7 +256,7 @@ Backend định nghĩa global prefix **`/api/v1`**; xem toàn bộ contract, DTO
 
 | Domain | Endpoint tiêu biểu |
 |---|---|
-| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`; `GET /auth/me` |
+| Auth | `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`; profile tại `GET /users/me` |
 | Users | `GET/PATCH /users/me`, `GET /users/:username`, `POST/DELETE /users/:username/follow` |
 | Pins | `GET /users/me/pins`, `PUT/DELETE /users/me/pins/:locationId` |
 | Locations | `GET /locations`, `/locations/in-viewport`, `/locations/trending`, `/locations/:id` |
@@ -296,12 +296,16 @@ Migrations chính nằm tại `backend/src/database/migrations/`:
 010_notifications_realtime.sql
 011_comment_request_id.sql
 012_comment_interaction_notifications.sql
+013_conversations_messages.sql
+014_messaging_blocks.sql
+015_fix_location_search_normalization.sql
+016_managed_media.sql
 ```
 
 Phase 2 Step 3 đã mở rộng tab bản đồ Profile với danh sách, bộ lọc, thống kê và
 Journey Builder: chọn/sắp xếp điểm, preview Mapbox, lưu nháp/công khai, sửa/xóa theo quyền.
 Xem [hướng dẫn My Travel Map & Journey](docs/phase-2-step-3.md) và
-[xuất ảnh Journey PNG](docs/phase-2-step-5.md). Journey Post/Feed là bước tiếp theo sau export.
+[xuất ảnh Journey PNG](docs/phase-2-step-5.md) và [chia sẻ Journey lên Feed](docs/phase-2-step-6.md).
 
 Phase 2 Step 1 bổ sung schema đã đến/Journey. Step 2 thêm API và giao diện đánh dấu
 ở trang/panel địa điểm, quản lý ngày ghé thăm và quyền riêng tư. Migration 008 chuyển
@@ -335,7 +339,7 @@ Roadmap là **kế hoạch**, không phải các tính năng được xác nhậ
 
 - [x] **My Travel Footprint:** bản đồ, danh sách, thống kê và bộ lọc năm/quốc gia/tìm kiếm, có phân quyền trên Profile.
 - [x] **Journey Flex MVP:** chọn/sắp xếp điểm đã đến, nối trên Mapbox, tùy chỉnh, preview và lưu nháp/công khai. Export và bài Feed được theo dõi riêng bên dưới.
-- [ ] **Journey Post:** chia sẻ bản đồ hành trình như một loại nội dung trên Feed.
+- [x] **Journey Post:** chia sẻ bản đồ hành trình như một loại nội dung trên Feed.
 - [x] **Xuất ảnh hành trình:** poster PNG 1:1/4:5, preview và tải về; [chi tiết](docs/phase-2-step-5.md).
 - [ ] Animated recap/video để giai đoạn mở rộng.
 
@@ -394,7 +398,7 @@ npm run build
 npm run db:migrate:status
 ```
 
-> `frontend/package.json` trong ZIP khai báo `lint` là `next lint`, có thể không tương thích với phiên bản Next.js đang cài. Kiểm tra script và chạy ESLint trực tiếp hoặc cập nhật script trước khi dùng trong CI. Các script `api:*` ở `frontend/package.json` trỏ đến `backend/` tương đối với **frontend/**, nên không được xem là lệnh root/backend hợp lệ nếu chưa sửa.
+Frontend dùng `npm run lint`, `npm run type-check`, `npm test` và `npm run build`. Chạy npm từ đúng app; không có package.json/scripts `api:*` ở root. CI dùng PostGIS riêng qua `WANDERMAP_TEST_DATABASE_URL`, không dùng database ứng dụng.
 
 ### Checklist trước khi merge
 
@@ -407,13 +411,17 @@ npm run db:migrate:status
 
 ## Triển khai & các lưu ý
 
-Hiện có `backend/Dockerfile` và `backend/docker-compose.yml` phục vụ backend/database. Frontend có thể được deploy lên nền tảng hỗ trợ Next.js như Vercel, còn NestJS/PostgreSQL cần môi trường triển khai độc lập phù hợp. **Chưa có bằng chứng trong ZIP để khẳng định pipeline deploy production đã hoàn thiện**.
+Kiến trúc đã chọn: Vercel frontend, một Render backend instance, managed PostgreSQL/PostGIS **khởi tạo trống**, Cloudinary authenticated storage. Docker Compose chỉ cho development. Không chuyển dữ liệu development lên production. Workflow `.github/workflows/ci.yml` kiểm tra hai app; chưa tự deploy.
+
+Runbooks: [Deployment](docs/deployment/DEPLOYMENT_GUIDE.md), [Environment](docs/deployment/ENVIRONMENT_VARIABLES.md), [Media security](docs/deployment/MEDIA_SECURITY.md), [Smoke tests](docs/deployment/SMOKE_TEST_CHECKLIST.md), [Rollback](docs/deployment/ROLLBACK_PLAN.md).
+
+Sau khi backup/review DB development, áp dụng migrations mới 015–016 bằng source runner trước khi dùng code upload mới. Mốc A không chạy migrations trên database development. Media mới dùng URL `/api/v1/media/:id`; private bytes được backend kiểm tra quyền, frontend dùng bearer/Blob memory và no-store. Legacy `/uploads` chỉ giữ compatibility development, không trở thành private tự động.
 
 Trước khi triển khai production:
 
 1. Cấu hình `API_INTERNAL_URL` cho Next.js **trước khi build**; kiểm tra rewrite và cookie domain/site.
 2. Cấu hình HTTPS, CORS, secrets và chính sách cookie chính xác.
-3. Chuyển hoặc cấu hình persist storage cho ảnh upload; local disk của container có thể mất khi redeploy.
+3. Cấu hình Cloudinary backend credentials và kiểm chứng authenticated upload/delivery; không đặt secrets ở frontend hoặc mở public provider URLs cho ảnh private.
 4. Quản lý backup database, kiểm thử migration trên staging và theo dõi health/logs.
 5. Kiểm tra điều kiện sử dụng các dịch vụ bản đồ/tìm kiếm bên thứ ba; không mặc định dùng public Photon instance cho lưu lượng production lớn.
 6. Cấu hình kiểm thử tự động và pipeline deploy đúng với scripts/paths thực tế của `frontend/` và `backend/`.

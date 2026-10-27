@@ -20,7 +20,7 @@ import { MessagingModule } from './messaging/messaging.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env', validate: validateEnv }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env', ignoreEnvFile: process.env.NODE_ENV === 'test', validate: validateEnv }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     DatabaseModule,
     HealthModule,

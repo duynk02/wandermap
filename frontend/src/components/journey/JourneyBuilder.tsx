@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
+import { MediaImage as Image } from "@/components/ui/MediaImage";
 import * as Dialog from "@radix-ui/react-dialog";
 import { motion, Reorder, useDragControls } from "framer-motion";
 import {

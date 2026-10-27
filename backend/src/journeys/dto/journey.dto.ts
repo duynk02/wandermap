@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsManagedMediaUrl } from '../../uploads/managed-media-url';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -55,6 +56,7 @@ class JourneyMetadataDto {
     require_tld: false,
   })
   @MaxLength(2048)
+  @IsManagedMediaUrl()
   cover_image_url?: string | null;
   @ApiPropertyOptional({ enum: ['public', 'private'] })
   @ValidateIf((_o: unknown, v: unknown) => v !== undefined)

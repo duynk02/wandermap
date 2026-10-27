@@ -1,5 +1,6 @@
 "use client";
 
+import { MediaImage } from "@/components/ui/MediaImage";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useInfiniteQuery, useMutation, useQueryClient, type QueryKey } from "@tanstack/react-query";
@@ -202,8 +203,8 @@ export function CommentItem({
     <div className="flex gap-2.5">
       {/* Decorative: the name link in the bubble carries the accessible label. */}
       <Link href={ROUTES.profile(comment.author.username)} className="shrink-0" aria-hidden tabIndex={-1}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+
+        <MediaImage
           src={getAvatarUrl(comment.author.avatar_url, comment.author.username)}
           alt=""
           className={cn("rounded-full object-cover", isReply ? "h-7 w-7" : "h-8 w-8")}

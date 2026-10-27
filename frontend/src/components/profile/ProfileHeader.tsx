@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { MediaImage as Image } from "@/components/ui/MediaImage";
 import { useState } from "react";
 import { MapPin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";

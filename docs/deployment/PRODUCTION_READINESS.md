@@ -1,4 +1,33 @@
-# WanderMap — Production Readiness Audit & Kế hoạch Mốc A
+# WanderMap — Production Readiness Audit & Implementation Mốc A
+
+## Kết luận hiện tại — sau implementation Mốc A, 27/10/2026
+
+**Code prepared và locally verified; CHƯA kết luận READY FOR MILESTONE B.** Các P0 đã có implementation và bằng chứng local; real Cloudinary delivery, Render/Vercel topology và GitHub Actions vẫn chưa xác minh. P1-06 còn **PARTIALLY FIXED**. Không có residual risk nào được tự gán ACCEPTED RISK. Chỉ mở private deployment theo runbook sau review và CI xanh; cloud smoke tests là điều kiện trước khi mở audience.
+
+Xem [MILESTONE_A_RESULTS.md](MILESTONE_A_RESULTS.md) để review dependencies, migration, security controls, kết quả test, đầy đủ files changed, environment variables và bước thủ công. Phần audit baseline bên dưới giữ nguyên các phát hiện/trạng thái lịch sử; bảng hiện tại này có hiệu lực cho implementation mới.
+
+## Implementation ledger — 27/10/2026
+
+Quyết định đã chốt: Cloudinary; authorization cho bytes media private; production DB trống, không chuyển development data; Node.js 22.23.4 security release. Baseline implementation `bed9a98` chỉ bổ sung báo cáo so với source đã audit. Không tạo cloud resources, truy cập production credentials, commit/push/merge hoặc chạy migration trên DB hiện có.
+
+| Package | Issues | Trạng thái implementation và bằng chứng |
+| --- | --- | --- |
+| A1 | P0-02, P1-01 | **FIXED & VERIFIED (local/Linux)**: Next/eslint-config-next 15.5.28, Sharp frontend 0.35.5, Zod 4.6.7 + resolver 5.9.2; scoped overrides body-parser 2.4.0, Multer 2.5.0, js-yaml 5.5.0, fast-uri 3.1.9, Next PostCSS 8.5.30 và selector parser 6.1.5. Full và production-only audit cả hai app: 0 advisories. Clean npm ci/build trên Node 22.23.4 Linux đạt; native Next optimizer/Sharp và Vietnamese schema/resolver tests đạt. Cloud runtime vẫn NOT VERIFIED. |
+| A2 | P1-02, P1-03, P1-06 | **P1-02 FIXED & VERIFIED; P1-03 FIXED, NOT VERIFIED IN CLOUD; P1-06 PARTIALLY FIXED**. Blank defaults, exact HTTPS origins, secret-safe validation, no production localhost fallbacks, same-origin REST enforcement, explicit trusted CIDRs và TLS verification. Env/proxy/cookie tests đạt. pg Client transport tests xác nhận URL sslmode không ghi đè certificate verification, áp dụng cho pool/LISTEN/migrations. Render forwarding topology, TLS endpoint và Vercel cookies vẫn cần cloud verification. |
+| A3 | P0-01, P1-04, P1-09 | **FIXED, NOT VERIFIED IN CLOUD**. `media_assets`/ownership triggers (016), authenticated Cloudinary SDK 2.11.0, local private provider, per-request/rechecked resource authorization, no-store delivery và 18 consumers ảnh được triển khai; không lộ provider URLs. 12 upload/storage unit tests, 5 HTTP/PostGIS media security tests trên disposable DB và 143 frontend tests đạt. Real Cloudinary upload/delivery, unsigned URL rejection trên account thật và Vercel caching vẫn NOT VERIFIED. Xem MEDIA_SECURITY.md; legacy development URLs không được tự migrate hoặc mô tả là private. |
+| A4 | P1-05, P1-08 | **FIXED & VERIFIED cho production DB trống**. Migration 015 sửa unaccent, refresh STORED search values, giữ timestamps/coordinates/trigger mode và indexes; 3 integration tests nâng cấp schema có dữ liệu đạt. Manifest Git-baseline đóng gói verified canonical copies vào dist, không viết lại 001–014 hoặc DB history; tests chặn SQL drift. Compiled runner áp dụng đủ 16 migrations trên DB test mới, lần hai no-op, status 0 pending. Toàn bộ 9 DB suites/156 tests không skip đạt. DB development CRLF tiếp tục dùng source runner; không dùng canonical production artifact để né checksum trên DB cũ. |
+| A5 | P1-07, P2-01 | **FIXED, NOT VERIFIED IN CLOUD; GITHUB CI NOT RUN**. Một workflow Next/Nest thay Deno, Node 22.23.4, npm ci, audits, frontend tests/build và PostGIS service; CI từ chối missing/skipped DB tests. Mirror Linux cuối: frontend 143 tests/lint 0 warnings/type-check/build; backend 163 unit + 3 transport + 156 DB tests không skip, health e2e/type-check/lint/build đạt. Final production image non-root, đúng Node 22.23.4/16 SQL artifacts, compiled API/real DB/authenticated socket/SIGTERM đạt. GitHub Actions chưa được trigger/push trong Mốc A. |
+| A6 | P2-02 đến P2-06 | **FIXED, NOT VERIFIED IN CLOUD**. Swagger production default off/persistAuthorization false; LOG_LEVEL validate/apply, redact raw errors; lint warnings đã sửa; README và deployment/env/smoke/rollback/media-security docs đã thêm/cập nhật; Photon example HTTPS. Real cloud behavior và full browser matrix vẫn cần Mốc B. |
+
+| Phát hiện bổ sung trong implementation | P1-10, P1-11 | P1-10 **FIXED & VERIFIED**: auth forms khai báo method POST để native fallback trước hydration không đưa password lên query string; regression Chrome xác nhận form POST và login thực tế. P1-11 **FIXED, NOT VERIFIED IN CLOUD**: shared pg connection policy loại URL SSL overrides và luôn verified TLS production; 3 transport tests dùng pg Client thật đạt trên Linux Node 22.23.4. |
+
+Không còn issue được để **OPEN/BLOCKED** trong phần implementation local; các release gates chưa hoàn tất được ghi rõ PARTIALLY FIXED hoặc NOT VERIFIED. Điều này không đóng cloud gates hay chứng minh toàn bộ UX Phase 1–4.
+
+Runtime pin là security release [Node.js 22.23.4, 21/10/2026](https://nodejs.org/en/blog/release/v22.23.4). Host Windows vẫn là 22.21.1; không thay global runtime. Bằng chứng runtime đích lấy từ official Linux image 22.23.4.
+
+---
+
+## Audit baseline (trước implementation)
 
 - Ngày audit: **27/10/2026**, múi giờ Asia/Saigon.
 - Baseline: commit **`5c5bbf0`**, `Merge pull request #7 from duynk02/feature/phase-4-messaging`; working tree sạch khi bắt đầu.

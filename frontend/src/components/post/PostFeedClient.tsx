@@ -17,7 +17,7 @@ async function fetchPosts(locationId: string, page: number) {
 }
 
 export function PostFeedClient({ locationId, initialPage = 1 }: PostFeedClientProps) {
-  const { items, sentinelRef, isLoading, isFetchingNextPage } = useInfiniteScroll<Post>({
+  const { items, sentinelRef, isFetchingNextPage } = useInfiniteScroll<Post>({
     queryKey: [...QUERY_KEYS.posts.byLocation(locationId), "client", initialPage],
     queryFn: (page) => fetchPosts(locationId, page + initialPage - 1),
   });

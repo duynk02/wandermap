@@ -70,7 +70,7 @@ export class PlacesService {
     if (existing.status === 'rejected') throw existing.reason;
 
     if (external.status === 'rejected') {
-      this.logger.warn(`Photon search failed: ${external.reason instanceof Error ? external.reason.message : external.reason}`);
+      this.logger.warn('Photon search unavailable; returning existing locations only.');
     }
     const suggestions = external.status === 'fulfilled' ? external.value : [];
     return {
